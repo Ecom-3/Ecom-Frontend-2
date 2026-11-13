@@ -139,3 +139,27 @@
   line-height: 1.2 !important;
   max-width: 70px;
 }
+
+.categories-content-scroll{padding:12px 4vw 78px;background:#fff}
+.categories-title-banner{height:68px;display:flex;align-items:center;gap:13px;position:relative;overflow:hidden;margin-bottom:12px;padding:0 16px;border-radius:13px;background:linear-gradient(105deg,#eef8f2 0%,#eaf5ed 58%,#e5f2e9 100%)}
+.categories-title-icon{width:42px;height:42px;display:grid;place-items:center;flex:none;border-radius:11px;background:#e0f4e6;color:#087b44}
+.categories-title-icon svg{font-size:28px}
+.all-categories-title{margin:0!important;color:#17243a!important;font-size:21px!important;font-weight:850!important;line-height:1.15!important}
+.all-categories-subtitle{margin-top:3px!important;color:#43546a;font-size:11px!important}
+.categories-spice-art{position:absolute;right:-3px;bottom:-10px;width:34%;height:86px;display:flex;align-items:flex-end;justify-content:flex-end;overflow:hidden;pointer-events:none}
+.categories-spice-art img{width:34%;height:92px;object-fit:cover;object-position:center 65%;mix-blend-mode:multiply;opacity:.95;mask-image:linear-gradient(to top,#000 56%,transparent 100%)}
+.categories-spice-art img:nth-child(2){width:30%;height:105px}
+.categories-spice-art img:nth-child(3){width:40%;height:84px}
+.categories-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:9px 10px;padding:0 1px}
+.category-tile{min-width:0;height:72px;display:flex;align-items:center;gap:10px;padding:6px 9px;border:1px solid #e1e8ee;border-radius:10px;background:#fff;text-align:left;cursor:pointer;box-shadow:0 2px 5px #163a2808;transition:transform .16s ease,box-shadow .16s ease,border-color .16s ease}
+.category-tile:hover{transform:translateY(-1px);border-color:#b6d8c4;box-shadow:0 5px 14px #163a2812}
+.category-tile:focus-visible{outline:2px solid #087b49;outline-offset:2px}
+.category-tile-image{width:80px;height:58px;flex:none;display:grid;place-items:center;overflow:hidden;border-radius:30px;background:#f8f9f7}
+.category-tile-image img{width:100%;height:100%;object-fit:cover;object-position:center 62%;mix-blend-mode:multiply}
+.category-tile-copy{min-width:0;display:grid;gap:2px}
+.category-item-title{overflow:hidden;color:#17243a!important;font-size:12px!important;font-weight:800!important;line-height:1.25!important;text-overflow:ellipsis;white-space:nowrap}
+.category-item-subtitle{display:-webkit-box;overflow:hidden;color:#536278!important;font-size:9px!important;line-height:1.35!important;-webkit-box-orient:vertical;-webkit-line-clamp:2}
+.category-tile-arrow{width:23px;height:23px;flex:none;display:grid;place-items:center;margin-left:auto;border-radius:50%;background:#e6f5e9;color:#087a42}
+.category-tile-arrow svg{font-size:16px}
+@media(max-width:900px){.categories-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.categories-spice-art{width:30%}}
+@media(max-width:600px){.categories-content-scroll{padding:10px 4vw 75px}.categories-title-banner{height:64px;padding:0 11px}.all-categories-title{font-size:18px!important}.all-categories-subtitle{max-width:230px;font-size:9px!important}.categories-spice-art{width:28%;opacity:.65}.categories-grid{grid-template-columns:1fr;gap:8px}.category-tile{height:70px}.category-tile-image{width:76px}.category-item-title{font-size:12px!important}.category-item-subtitle{font-size:9px!important}}

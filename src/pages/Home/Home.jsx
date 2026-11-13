@@ -29,6 +29,7 @@ import { useOrderableStores } from '../../hooks/useOrderableStores';
 import { getProductReviewsBatch } from '../../services/reviewApi';
 import { getCurrentDeliveryLocation } from '../../services/googleMapsService';
 import './Home.css';
+import './HomeReference.css';
 
 const OTHER_SUBCATEGORY_CATEGORIES = ['Traditional Pickles', 'Premium Dry Fruits', 'Fresh Vegetables', 'Fresh Non-Veg'];
 
@@ -249,7 +250,27 @@ const Home = () => {
   const catalogApiProducts = selectedCategoryData ? availableCategoryProductPool : availableProductPool;
   const productCardKey = (product, suffix = '') => `${product.storeId || product.store || 'store'}:${product.productId || product.id || product.title}${suffix}`;
   const uniqueByProduct = uniqueStoreProductListings;
+  const uniqueCatalogListings = (items) => {
+    const seen = new Set();
+    return items.filter((item) => {
+      const key = String(item.productId || item.id || item.title || '').trim();
+      if (!key || seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+  };
   const merchProducts = (flag) => uniqueByProduct(availableProductPool.filter((item) => item[flag] === 'Yes' || item[flag] === true));
+  const usedHomeProductIds = new Set();
+  const homeSectionPreview = (items) => balancedStoreProductPreview(uniqueCatalogListings(items).filter((item) => {
+    const id = String(item.productId || item.id || item.title || '').trim();
+    if (!id || usedHomeProductIds.has(id)) return false;
+    usedHomeProductIds.add(id);
+    return true;
+  }));
+  const featuredPreview = homeSectionPreview(merchProducts('featured'));
+  const specialPreview = homeSectionPreview(merchProducts('special'));
+  const newArrivalPreview = homeSectionPreview(merchProducts('newArrival'));
+  const recommendedPreview = homeSectionPreview(availableProductPool);
   const populatedCategorySections = sharedCategories.map((category) => ({
     ...category,
     products: uniqueByProduct(availableProductPool.filter((product) => {
@@ -301,7 +322,7 @@ const Home = () => {
   return (
     <Box className="home-wrapper">
       <Header />
-      {selectedLocation && !catalogLoading && !catalogError && sharedStores.length === 0 && <Box sx={{ p: 2, textAlign: 'center' }}><Typography>No stores currently deliver to {selectedLocation.address || selectedLocation.city}.</Typography><Button onClick={() => setShowLocationModal(true)}>Change location</Button></Box>}
+      {selectedLocation && !catalogLoading && !catalogError && sharedStores.length === 0 && !allMasterProducts.some(isGlobalProduct) && <Box sx={{ p: 2, textAlign: 'center' }}><Typography>No stores currently deliver to {selectedLocation.address || selectedLocation.city}.</Typography><Button onClick={() => setShowLocationModal(true)}>Change location</Button></Box>}
       <CategoryNav />
       {subcategories.length > 0 && <Box className="subcategory-nav"><Button className={effectiveSubcategory === 'All' ? 'active' : ''} onClick={() => setSelectedSubcategory('All')}>All</Button>{subcategories.map((name) => <Button key={name} className={effectiveSubcategory === name ? 'active' : ''} onClick={() => setSelectedSubcategory(name)}>{name}</Button>)}</Box>}
 
@@ -360,19 +381,19 @@ const Home = () => {
             </ProductSection>
 
             {merchProducts('featured').length > 0 && <ProductSection title={t('featured')} onViewAll={() => setCollection('featured')}>
-              {balancedStoreProductPreview(merchProducts('featured')).map((prod) => <ProductCard key={productCardKey(prod)} {...prod} />)}
+              {featuredPreview.map((prod) => <ProductCard key={productCardKey(prod)} {...prod} />)}
             </ProductSection>}
 
-            {merchProducts('special').length > 0 && <ProductSection title={t('special')} onViewAll={() => setCollection('special')}>
-              {balancedStoreProductPreview(merchProducts('special')).map((prod) => <ProductCard key={productCardKey(prod)} {...prod} />)}
+            {specialPreview.length > 0 && <ProductSection title={t('special')} onViewAll={() => setCollection('special')}>
+              {specialPreview.map((prod) => <ProductCard key={productCardKey(prod)} {...prod} />)}
             </ProductSection>}
 
-            <ProductSection title={t('newArrivals')} onViewAll={() => setCollection('newArrival')}>
-              {balancedStoreProductPreview(merchProducts('newArrival')).map((prod) => <ProductCard key={productCardKey(prod)} {...prod} />)}
-            </ProductSection>
+            {newArrivalPreview.length > 0 && <ProductSection title={t('newArrivals')} onViewAll={() => setCollection('newArrival')}>
+              {newArrivalPreview.map((prod) => <ProductCard key={productCardKey(prod)} {...prod} />)}
+            </ProductSection>}
 
             <ProductSection title={t('recommended')} onViewAll={() => setCollection('recommended')}>
-              {balancedStoreProductPreview(availableProductPool).map((prod) => <ProductCard key={productCardKey(prod)} {...prod} />)}
+              {recommendedPreview.map((prod) => <ProductCard key={productCardKey(prod)} {...prod} />)}
             </ProductSection>
 
             <ProductSection title={t('availableNearYou')} onViewAll={() => setCollection('nearby')}>

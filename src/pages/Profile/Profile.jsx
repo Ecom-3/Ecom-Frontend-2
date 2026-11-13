@@ -1,5 +1,5 @@
 import { useRef, useState, useContext, useEffect } from 'react';
-import { Box, Typography, Button, Divider } from '@mui/material';
+import { Box, Typography, Button, Divider, TextField } from '@mui/material';
 import Header from '../../components/Header/Header';
 import BottomNav from '../../components/BottomNav/BottomNav';
 import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
@@ -16,20 +16,26 @@ import LogoutOutlinedIcon from '@mui/icons-material/LogoutOutlined';
 import CameraAltOutlinedIcon from '@mui/icons-material/CameraAltOutlined';
 import HomeOutlinedIcon from '@mui/icons-material/HomeOutlined';
 import DeleteForeverOutlinedIcon from '@mui/icons-material/DeleteForeverOutlined';
+import PersonOutlineOutlinedIcon from '@mui/icons-material/PersonOutlineOutlined';
+import FavoriteBorderOutlinedIcon2 from '@mui/icons-material/FavoriteBorderOutlined';
+import BookmarkBorderOutlinedIcon from '@mui/icons-material/BookmarkBorderOutlined';
+import CardGiftcardOutlinedIcon from '@mui/icons-material/CardGiftcardOutlined';
+import CalendarMonthOutlinedIcon from '@mui/icons-material/CalendarMonthOutlined';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { AppContext } from '../../context/AppContext';
 import { customerProfileService } from '../../services/customerProfileService';
 import { getCustomerOrderHistory, isOrderServiceUnavailable, normalizeOrder } from '../../services/orderApi';
 import { hasCompleteProfile } from '../../utils/profileCompletion';
 import './Profile.css';
+import './ProfileReference.css';
 import { formatIndianMobile, isValidIndianMobile } from '../../utils/phoneValidation';
 import { validRegistrationName } from '../../utils/registrationValidation';
+import { isValidImageUrl, normalizeImageUrl } from '../../utils/imageUrl.js';
 
 const Profile = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  const { logout, user, setUser, addresses, deleteAddress, setDefaultAddress, formatDateTime, formatCurrency, selectedLocation } = useContext(AppContext);
-  const photoInputRef = useRef(null);
+  const { logout, user, setUser, addresses, deleteAddress, setDefaultAddress, formatDateTime, formatCurrency, selectedLocation, wishlistItems = [], savedForLater = [] } = useContext(AppContext);
   const addressSectionRef = useRef(null);
   const [addressesExpanded, setAddressesExpanded] = useState(false);
   const toggleAddresses = () => {
@@ -46,6 +52,7 @@ const Profile = () => {
     dateOfBirth: user?.dateOfBirth || '',
   });
   const [recentOrders, setRecentOrders] = useState([]);
+  const [orderTotal, setOrderTotal] = useState(0);
   const [ordersLoading, setOrdersLoading] = useState(false);
   const [ordersError, setOrdersError] = useState('');
   const tokenCustomerId = () => {
@@ -59,6 +66,7 @@ const Profile = () => {
   };
 
   const [feedback, setFeedback] = useState('');
+  const [photoUrl, setPhotoUrl] = useState(user?.photo || '');
   const [nameError, setNameError] = useState('');
   const addAddressState = () => ({
     returnTo: location.state?.returnTo || '/profile',
@@ -89,6 +97,7 @@ const Profile = () => {
       .then((payload) => {
         if (!ignore) {
           const rows = Array.isArray(payload) ? payload : payload?.orders || payload?.content || [];
+          setOrderTotal(payload?.totalElements ?? payload?.total ?? rows.length);
           setRecentOrders(rows.map(normalizeOrder).slice(0, 1));
         }
       })
@@ -132,23 +141,15 @@ const Profile = () => {
     navigate('/intro');
   };
 
-  const handlePhotoChange = (event) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-    if (!file.type.startsWith('image/')) return setFeedback('Please select a valid image file.');
-    if (file.size > 2 * 1024 * 1024) return setFeedback('Profile photo must be smaller than 2 MB.');
-    const reader = new FileReader();
-    reader.onload = async () => {
-      try {
-        const updatedUser = await customerProfileService.save({ name: user?.name, phone: user?.phone, email: user?.email, gender: user?.gender, dateOfBirth: user?.dateOfBirth, photo: reader.result });
-        setUser((current) => ({ ...current, ...updatedUser }));
-        setFeedback('Profile photo updated successfully.');
-      } catch (error) {
-        setFeedback(error.message);
-      }
-    };
-    reader.onerror = () => setFeedback('The selected image could not be read.');
-    reader.readAsDataURL(file);
+  const handlePhotoSave = async () => {
+    const normalized = normalizeImageUrl(photoUrl);
+    if (!normalized || !isValidImageUrl(normalized)) return setFeedback('Enter a valid image URL. Google Drive images must be shared with anyone who has the link.');
+    try {
+      const updatedUser = await customerProfileService.save({ name: user?.name, phone: user?.phone, email: user?.email, gender: user?.gender, dateOfBirth: user?.dateOfBirth, photo: normalized });
+      setUser((current) => ({ ...current, ...updatedUser }));
+      setPhotoUrl(normalized);
+      setFeedback('Profile photo updated successfully.');
+    } catch (error) { setFeedback(error.message); }
   };
 
   return (
@@ -161,22 +162,23 @@ const Profile = () => {
           {/* LEFT SIDEBAR */}
           <Box className="profile-sidebar">
             <Box className="user-summary-card">
-              <Box className="user-avatar-placeholder">{user?.photo ? <img src={user.photo} alt={`${profileData.name} profile`} style={{ width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover' }} /> : 'Avatar'}</Box>
+              <Box className="user-avatar-placeholder">{user?.photo ? <img src={user.photo} alt={`${profileData.name} profile`} style={{ width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover' }} /> : <PersonOutlineOutlinedIcon />}</Box>
               <Box className="user-summary-info">
                 <Typography className="user-name">{user?.name}</Typography>
                 <Typography className="user-phone">{user?.phone}</Typography>
                 <Typography className="user-email">{user?.email}</Typography>
               </Box>
-              <Typography className="edit-link" onClick={() => {
+              <Button className="edit-link" startIcon={<EditOutlinedIcon/>} onClick={() => {
                 setProfileData({ name: user?.name || '', phone: user?.phone || '', email: user?.email || '', gender: user?.gender || '', dateOfBirth: user?.dateOfBirth || '' });
                 setIsEditing(!isEditing);
               }} style={{ cursor: 'pointer' }}>
                 {isEditing ? 'Cancel' : 'Edit'}
-              </Typography>
+              </Button>
             </Box>
 
             <Box className="sidebar-menu">
               {[
+                { icon: <PersonOutlineOutlinedIcon />, text: 'My Profile', path: '/profile' },
                 { icon: <ShoppingBagOutlinedIcon />, text: 'Orders', path: '/orders' },
                 { icon: <LocationOnOutlinedIcon />, text: 'Address', path: '/saved-addresses' },
                 { icon: <PrivacyTipOutlinedIcon />, text: 'Privacy policy', path: '/privacy-policy' },
@@ -191,7 +193,7 @@ const Profile = () => {
               ].map((item, index) => (
                 <Box
                   key={index}
-                  className="sidebar-menu-item"
+                  className={`sidebar-menu-item ${item.text === 'My Profile' ? 'active' : ''}`}
                   role="button"
                   tabIndex={0}
                   aria-expanded={item.text === 'Address' ? addressesExpanded : undefined}
@@ -223,6 +225,7 @@ const Profile = () => {
 
           {/* RIGHT CONTENT */}
           <Box className="profile-main-content">
+            <Box className="profile-page-heading"><Box><Typography variant="h4">My Profile</Typography><Typography>Manage your account details, addresses, and preferences.</Typography></Box><Box className="profile-spice-art" aria-hidden="true"><img src="/catalog-images/catalog-ground-spices.png" alt=""/><img src="/catalog-images/catalog-blended-masalas.png" alt=""/></Box></Box>
             
             {/* Profile Information Section */}
             <Box className="content-section">
@@ -248,11 +251,10 @@ const Profile = () => {
               
               <Box className="profile-info-grid">
                 <Box className="profile-photo-area">
-                  <Box className="large-avatar-placeholder">{user?.photo ? <img src={user.photo} alt={`${profileData.name} profile`} style={{ width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover' }} /> : 'Photo'}</Box>
-                  <input ref={photoInputRef} hidden type="file" accept="image/png,image/jpeg,image/webp" onChange={handlePhotoChange} />
-                  <Button variant="outlined" startIcon={<CameraAltOutlinedIcon />} className="change-photo-btn" onClick={() => photoInputRef.current?.click()}>
-                    Change Photo
-                  </Button>
+                  <Box className="large-avatar-placeholder">{user?.photo ? <img src={user.photo} alt={`${profileData.name} profile`} style={{ width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover' }} /> : <CameraAltOutlinedIcon/>}</Box>
+                  {isEditing && <TextField size="small" label="Photo URL" placeholder="Paste a shareable image link" value={photoUrl} onChange={(event) => setPhotoUrl(event.target.value)} helperText="Anyone with the link must be able to view the image." sx={{ mt: 1 }} />}
+                  {isEditing && <Button variant="outlined" startIcon={<CameraAltOutlinedIcon />} className="change-photo-btn" onClick={handlePhotoSave}>Save Photo</Button>}
+                  {!isEditing && <Typography className="add-photo-caption">Add Photo</Typography>}
                 </Box>
                 
                 <Box className="profile-details-area">
@@ -292,10 +294,6 @@ const Profile = () => {
                     </Box>
                   </Box>
                   <Box className="detail-row">
-                    <Box className="detail-item"><Typography className="detail-label">Gender</Typography>{isEditing ? <select value={profileData.gender} onChange={(e) => setProfileData({ ...profileData, gender:e.target.value })} style={{ padding:'6px 10px',borderRadius:6,border:'1px solid #cbd5e1' }}><option value="">Select</option><option>Female</option><option>Male</option><option>Other</option><option>Prefer not to say</option></select> : <Typography className="detail-value">{profileData.gender || 'Not specified'}</Typography>}</Box>
-                    <Box className="detail-item"><Typography className="detail-label">Date of Birth</Typography>{isEditing ? <input type="date" value={profileData.dateOfBirth} onChange={(e) => setProfileData({ ...profileData,dateOfBirth:e.target.value })} style={{ padding:'6px 10px',borderRadius:6,border:'1px solid #cbd5e1' }} /> : <Typography className="detail-value">{profileData.dateOfBirth || 'Not specified'}</Typography>}</Box>
-                  </Box>
-                  <Box className="detail-row">
                     <Box className="detail-item">
                       <Typography className="detail-label">Email Address</Typography>
                       {isEditing ? (
@@ -309,19 +307,28 @@ const Profile = () => {
                         <Typography className="detail-value">{profileData.email}</Typography>
                       )}
                     </Box>
+                    <Box className="detail-item"><Typography className="detail-label">Gender</Typography>{isEditing ? <select value={profileData.gender} onChange={(e) => setProfileData({ ...profileData, gender:e.target.value })} style={{ padding:'6px 10px',borderRadius:6,border:'1px solid #cbd5e1' }}><option value="">Select</option><option>Female</option><option>Male</option><option>Other</option><option>Prefer not to say</option></select> : <Typography className="detail-value">{profileData.gender || 'Not specified'}</Typography>}</Box>
                   </Box>
                   <Box className="detail-row">
                     <Box className="detail-item">
                       <Typography className="detail-label">Member Since</Typography>
                       <Typography className="detail-value flex-align">
-                        <DescriptionOutlinedIcon fontSize="small" sx={{ mr: 1, color: '#666' }} /> 
+                        <CalendarMonthOutlinedIcon fontSize="small" sx={{ mr: 1, color: '#087b49' }} /> 
                         {user?.createdAt ? formatDateTime(user.createdAt, { dateStyle: 'medium' }) : 'Not available'}
                       </Typography>
                     </Box>
+                    <Box className="detail-item"><Typography className="detail-label">Date of Birth</Typography>{isEditing ? <input type="date" value={profileData.dateOfBirth} onChange={(e) => setProfileData({ ...profileData,dateOfBirth:e.target.value })} style={{ padding:'6px 10px',borderRadius:6,border:'1px solid #cbd5e1' }} /> : <Typography className="detail-value">{profileData.dateOfBirth || 'Not specified'}</Typography>}</Box>
                   </Box>
                 </Box>
               </Box>
             </Box>
+
+            <Box className="profile-metrics">{[
+              { label:'Total Orders', value:orderTotal, icon:<ShoppingBagOutlinedIcon/>, tone:'green' },
+              { label:'Wishlist Items', value:wishlistItems.length, icon:<FavoriteBorderOutlinedIcon2/>, tone:'pink' },
+              { label:'Saved Items', value:savedForLater.length, icon:<BookmarkBorderOutlinedIcon/>, tone:'blue' },
+              { label:'Offers Used', value:Number(user?.offersUsed || 0), icon:<CardGiftcardOutlinedIcon/>, tone:'amber' },
+            ].map((metric)=><Box className={`profile-metric ${metric.tone}`} key={metric.label}><Box>{metric.icon}</Box><section><strong>{metric.value}</strong><small>{metric.label}</small></section></Box>)}</Box>
 
             {/* Addresses Section */}
             <Box className="content-section" id="profile-saved-addresses" ref={addressSectionRef} sx={{ scrollMarginTop: '150px' }}>

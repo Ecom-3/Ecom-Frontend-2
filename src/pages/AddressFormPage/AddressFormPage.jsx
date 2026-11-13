@@ -1,5 +1,5 @@
 import { useEffect, useState, useContext, useRef } from 'react';
-import { Box, Typography, Button, IconButton } from '@mui/material';
+import { Box, Typography, Button, IconButton, CircularProgress } from '@mui/material';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import HomeOutlinedIcon from '@mui/icons-material/HomeOutlined';
@@ -11,7 +11,7 @@ import { AppContext } from '../../context/AppContext';
 import { reverseGeocodeOpenStreetMap } from '../../services/openStreetMapService';
 import { indianMobileDigits } from '../../utils/phoneValidation';
 import { validateAddressFields } from '../../utils/addressValidation';
-import { addressFieldsFromLocation, fillMissingAddressFields } from '../../utils/addressPrefill';
+import { addressFieldsFromLocation, addressFieldsFromPostalLookup, fillMissingAddressFields } from '../../utils/addressPrefill';
 import './AddressFormPage.css';
 
 const normalizeLocation = (value) => value ? {
@@ -37,6 +37,8 @@ const AddressFormPage = () => {
   const [locationSummary, setLocationSummary] = useState(normalizeLocation(selectedLocation));
   const [manualMode, setManualMode] = useState(Boolean(location.state?.startManual || (!selectedLocation && editAddress?.manualLocation)));
   const [manualLocation, setManualLocation] = useState(selectedLocation ? addressFieldsFromLocation(selectedLocation) : draft?.manualLocation || editAddress?.manualLocation || addressFieldsFromLocation({}));
+  const [pinLookupStatus, setPinLookupStatus] = useState('');
+  const [isLookingUpPin, setIsLookingUpPin] = useState(false);
 
   const [houseNumber, setHouseNumber] = useState(draft?.houseNumber || editAddress?.houseNumber || '');
   const [floor, setFloor] = useState(draft?.floor || editAddress?.floor || '');
@@ -47,6 +49,44 @@ const AddressFormPage = () => {
   const [isSaving, setIsSaving] = useState(false);
   const savePending = useRef(false);
   const [makeDefault, setMakeDefault] = useState(Boolean(editAddress?.isDefault || addresses.length === 0));
+
+  useEffect(() => {
+    const pincode = String(manualLocation.pincode || '').trim();
+    if (!manualMode || !/^[1-9]\\d{5}$/.test(pincode)) {
+      setPinLookupStatus('');
+      return undefined;
+    }
+    let cancelled = false;
+    const timeout = setTimeout(async () => {
+      setIsLookingUpPin(true);
+      setPinLookupStatus('');
+      try {
+        const response = await fetch(`https://api.postalpincode.in/pincode/${pincode}`);
+        if (!response.ok) throw new Error('PIN lookup failed');
+        const payload = await response.json();
+        const offices = payload?.[0]?.Status === 'Success' ? payload[0].PostOffice : [];
+        if (!offices?.length) {
+          if (!cancelled) setPinLookupStatus('No location details found. You can fill them in below.');
+          return;
+        }
+        const details = addressFieldsFromPostalLookup(offices[0]);
+        if (!cancelled) {
+          setManualLocation((current) => ({
+            ...current,
+            village: details.village,
+            city: details.city,
+            state: details.state,
+          }));
+          setPinLookupStatus('Location details found. Check them and edit if needed.');
+        }
+      } catch {
+        if (!cancelled) setPinLookupStatus('Could not look up this PIN. You can enter the location details manually.');
+      } finally {
+        if (!cancelled) setIsLookingUpPin(false);
+      }
+    }, 350);
+    return () => { cancelled = true; clearTimeout(timeout); };
+  }, [manualLocation.pincode, manualMode]);
 
   const useGps = () => navigate('/address-map', {
     state: {
@@ -78,15 +118,16 @@ const AddressFormPage = () => {
       return;
     }
     if (!manualMode && !locationSummary && !editAddress) { setFormError('Wait for the live location or enter the address manually.'); return; }
-    const baseLocation = manualMode ? joinAddressParts([manualLocation.street, manualLocation.city, manualLocation.state, manualLocation.pincode]) : locationSummary ? joinAddressParts([locationSummary.title, locationSummary.subtitle || locationSummary.address]) : editAddress.address;
+    const baseLocation = manualMode ? joinAddressParts([manualLocation.street, manualLocation.village, manualLocation.city, manualLocation.state, manualLocation.pincode]) : locationSummary ? joinAddressParts([locationSummary.title, locationSummary.subtitle || locationSummary.address]) : editAddress.address;
     const formatted = joinAddressParts([saveAs, houseNumber, floor ? `Floor ${floor}` : '', landmark, baseLocation]);
     const detectedManualLocation = locationSummary ? {
       street: locationSummary.address || locationSummary.subtitle || locationSummary.title || '',
+      village: locationSummary.village || locationSummary.locality || locationSummary.suburb || '',
       city: locationSummary.city || '',
       state: locationSummary.state || '',
       pincode: locationSummary.pincode || '',
     } : null;
-    const addressData = { type: saveAs, address: formatted, phone:indianMobileDigits(phone), houseNumber, floor, landmark, isDefault:makeDefault, coordinates: manualMode ? null : (locationSummary?.coordinates || editAddress?.coordinates || null), manualLocation: manualMode ? manualLocation : detectedManualLocation };
+    const addressData = { type: saveAs, address: formatted, phone:indianMobileDigits(phone), houseNumber, floor, landmark, isDefault:makeDefault, coordinates: locationSummary?.coordinates || editAddress?.coordinates || null, manualLocation: manualMode ? manualLocation : detectedManualLocation };
     savePending.current = true;
     setIsSaving(true);
     try {
@@ -131,27 +172,50 @@ const AddressFormPage = () => {
 
       {/* Main Scroll Content */}
       <Box className="form-page-scroll">
-        {/* Top Location Summary Card */}
-        <Box className="loc-summary-card">
-          <Box className="loc-card-left">
-            <Typography className="loc-main-name">{`Location: ${locationSummary?.title || editAddress?.type || 'Select location'}`}</Typography>
-            <Typography className="loc-sub-name">{locationSummary?.subtitle || editAddress?.address || 'Use GPS to select a delivery point, then add your address details.'}</Typography>
-          </Box>
-          <Button className="change-loc-btn" startIcon={<MyLocationIcon />} onClick={useGps}>
-            {locationSummary ? 'Change location' : 'Use GPS'}
-          </Button>
-        </Box>
-
-        <Button variant="outlined" onClick={() => { setManualMode((value) => !value); setFormError(''); }} sx={{ alignSelf:'flex-start',mb:2,borderColor:'#075F40',color:'#075F40',textTransform:'none' }}>{manualMode ? 'Use detected location' : 'Enter address manually'}</Button>
-
         {/* Input Form Fields */}
         <Box className="address-form-box">
-          {locationSummary && !manualMode && <Typography role="status" sx={{ color:'#075F40', bgcolor:'#ecfdf5', p:1.25, borderRadius:1.5, fontSize:13 }}>GPS location selected. Add your building or house number, floor and landmark below before saving.</Typography>}
-          {manualMode && [['street', 'Street / Road / Area'], ['city', 'City'], ['state', 'State'], ['pincode', 'PIN / Postal code']].map(([key, label]) => <Box key={key} className="form-field-group">
+          <Box className="address-location-picker">
+            <Typography className="form-field-label">Choose delivery location <span className="req">*</span></Typography>
+            <Box className="address-location-options">
+              <Button className={`address-location-option ${!manualMode ? 'active' : ''}`} startIcon={<MyLocationIcon />} onClick={() => { setManualMode(false); setFormError(''); }}>
+                Current location
+              </Button>
+              <Button className={`address-location-option ${manualMode ? 'active' : ''}`} startIcon={<LocationOnOutlinedIcon />} onClick={() => { setManualMode(true); setFormError(''); }}>
+                Other location
+              </Button>
+            </Box>
+          </Box>
+          {!manualMode && <Box className="loc-summary-card">
+            <Box className="loc-card-left">
+              <Typography className="loc-main-name">{`Location: ${locationSummary?.title || editAddress?.type || 'Select location'}`}</Typography>
+              <Typography className="loc-sub-name">{locationSummary?.subtitle || editAddress?.address || 'Select your current delivery point on the map.'}</Typography>
+            </Box>
+            <Button className="change-loc-btn" startIcon={<MyLocationIcon />} onClick={useGps}>
+              {locationSummary ? 'Choose on map' : 'Get current location'}
+            </Button>
+          </Box>}
+
+          {manualMode && <>
+          <Box className="form-field-group">
+            <Typography component="label" htmlFor="address-pincode" className="form-field-label">PIN / Postal code <span className="req">*</span></Typography>
+            <Box className="pin-lookup-input-wrap">
+              <input id="address-pincode" className="custom-form-input" value={manualLocation.pincode || ''} inputMode="numeric" maxLength={6} aria-invalid={Boolean(fieldErrors.pincode)} aria-describedby={fieldErrors.pincode ? 'error-pincode' : undefined} onChange={event => { const value = event.target.value.replace(/\D/g, '').slice(0, 6); setManualLocation(current => ({ ...current, pincode: value, village: '', city: '', state: '' })); setFieldErrors(current => ({ ...current, pincode: '' })); }} placeholder="Enter 6-digit PIN code" />
+              {isLookingUpPin && <CircularProgress size={19} aria-label="Looking up PIN code" />}
+            </Box>
+            {fieldErrors.pincode && <Typography id="error-pincode" role="alert" color="error" variant="caption">{fieldErrors.pincode}</Typography>}
+            {pinLookupStatus && <Typography role="status" className="pin-lookup-status">{pinLookupStatus}</Typography>}
+          </Box>
+          {['village', 'city', 'state', 'street'].map((key) => {
+            const labels = { village: 'Village / Locality', city: 'City', state: 'State', street: 'Street / Road / Area' };
+            const label = labels[key];
+            return <Box key={key} className="form-field-group">
             <Typography component="label" htmlFor={`address-${key}`} className="form-field-label">{label} <span className="req">*</span></Typography>
-            <input id={`address-${key}`} className="custom-form-input" value={manualLocation[key] || ''} inputMode={key === 'pincode' ? 'numeric' : 'text'} aria-invalid={Boolean(fieldErrors[key])} aria-describedby={fieldErrors[key] ? `error-${key}` : undefined} onChange={event => { const value = key === 'pincode' ? event.target.value.replace(/\D/g, '').slice(0, 6) : event.target.value; setManualLocation(current => ({ ...current, [key]: value })); setFieldErrors(current => ({ ...current, [key]: '' })); }} placeholder={`Enter ${label.toLowerCase()}`} />
+            <input id={`address-${key}`} className="custom-form-input" value={manualLocation[key] || ''} aria-invalid={Boolean(fieldErrors[key])} aria-describedby={fieldErrors[key] ? `error-${key}` : undefined} onChange={event => { setManualLocation(current => ({ ...current, [key]: event.target.value })); setFieldErrors(current => ({ ...current, [key]: '' })); }} placeholder={`Enter ${label.toLowerCase()}`} />
             {fieldErrors[key] && <Typography id={`error-${key}`} role="alert" color="error" variant="caption">{fieldErrors[key]}</Typography>}
-          </Box>)}
+          </Box>;
+          })}
+          </>}
+          {!manualMode && locationSummary && <Typography role="status" sx={{ color:'#075F40', bgcolor:'#ecfdf5', p:1.25, borderRadius:1.5, fontSize:13 }}>Current delivery point selected. Add your building, floor and landmark below.</Typography>}
           <Box className="form-field-group">
             <Typography className="form-field-label">
               House number /Name /Area <span className="req">*</span>

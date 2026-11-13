@@ -18,7 +18,25 @@ const toApi = (profile) => ({
 });
 
 export const customerProfileService = {
-  async me(options = {}) { return fromApi(await request('/api/v1/profiles/me', options)); },
+  async me(options = {}) {
+    try {
+      const profile = fromApi(await request('/api/v1/profiles/me', options));
+      if (profile.name && profile.phone) return profile;
+      const customer = fromApi(await customerAuthService.me());
+      return {
+        ...customer,
+        ...profile,
+        id: profile.id || customer.id || customer.customerId,
+        username: profile.username || customer.username || customer.email,
+        name: profile.name || customer.name,
+        phone: profile.phone || customer.phone,
+        email: profile.email || customer.email,
+      };
+    } catch (error) {
+      if (error.status !== 404) throw error;
+      return fromApi(await customerAuthService.me());
+    }
+  },
   async save(profile) { await customerAuthService.updateName(profile.name); return fromApi(await request('/api/v1/profiles/me', { method: 'PUT', body: JSON.stringify(toApi(profile)) })); },
   async remove() { await request('/api/v1/profiles/me', { method: 'DELETE' }); },
   async addresses() { return request('/api/v1/profiles/me/addresses'); },

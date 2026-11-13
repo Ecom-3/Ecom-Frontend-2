@@ -5,7 +5,7 @@ import { apiRequest } from '../services/apiClient.js';
 import { inventoryBaseUrl } from '../services/inventoryConfig.js';
 
 const identity = { productId: 'product', variantId: 'variant', storeId: 'store' };
-const row = { ...identity, available: true };
+const row = { ...identity, available: true, lowStock: false };
 
 test('inventory routing honors gateway, override, and local proxy', () => {
   assert.equal(inventoryBaseUrl({ VITE_API_BASE_URL: 'http://localhost:8082/' }), 'http://localhost:8082/inventory-service');
@@ -13,10 +13,11 @@ test('inventory routing honors gateway, override, and local proxy', () => {
   assert.equal(inventoryBaseUrl(), '/inventory-service');
 });
 test('public stock lookup returns availability without exposing inventory quantities', async () => {
-  assert.deepEqual(await loadProductStock(async () => row, identity), { state: 'available' });
+  assert.deepEqual(await loadProductStock(async () => row, identity), { state: 'available', lowStock: false });
+  assert.deepEqual(await loadProductStock(async () => ({ ...row, lowStock: true }), identity), { state: 'available', lowStock: true });
 });
 test('unavailable stock is confirmed non-purchasable', async () => {
-  assert.deepEqual(await loadProductStock(async () => ({ ...row, available: false }), identity), { state: 'out' });
+  assert.deepEqual(await loadProductStock(async () => ({ ...row, available: false, lowStock: true }), identity), { state: 'out', lowStock: false });
 });
 test('missing inventory is distinct from a failed request and zero stock', async () => {
   assert.deepEqual(await loadProductStock(async () => { throw Object.assign(new Error(), { status: 404 }); }, identity), { state: 'missing' });
@@ -26,7 +27,7 @@ test('a failed request affects only its card and never invents a zero quantity',
     loadProductStock(async () => { throw Object.assign(new Error(), { status: 502 }); }, identity),
     loadProductStock(async () => row, identity),
   ]);
-  assert.deepEqual(results, [{ state: 'error' }, { state: 'available' }]);
+  assert.deepEqual(results, [{ state: 'error' }, { state: 'available', lowStock: false }]);
 });
 test('mismatched identities and invalid availability cannot claim stock', async () => {
   for (const patch of [{ storeId: 'other' }, { productId: 'other' }, { variantId: 'other' }, { available: undefined }]) {

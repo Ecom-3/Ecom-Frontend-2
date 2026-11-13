@@ -1,4 +1,4 @@
-﻿const NOMINATIM_BASE = 'https://nominatim.openstreetmap.org';
+const NOMINATIM_BASE = 'https://nominatim.openstreetmap.org';
 const reverseGeocodeCache = new Map();
 let nominatimQueue = Promise.resolve();
 let lastNominatimRequestAt = 0;
@@ -24,7 +24,11 @@ const fromIndiaPost = (row, pincode) => {
     title,
     subtitle: address,
     address,
+    street: '',
+    area: row.Name || row.Block || '',
+    landmark: '',
     city,
+    district: row.District || city,
     state,
     pincode,
     latitude: null,
@@ -46,12 +50,17 @@ const normalizeAddress = (data) => {
   if (!data) return null;
   const address = data.address || {};
   return {
-    title: address.suburb || address.neighbourhood || address.village || address.town || address.city || 'Current location',
-    street: address.road || address.pedestrian || address.suburb || address.neighbourhood || address.village || '',
+    title: address.suburb || address.neighbourhood || address.village || address.hamlet || address.town || address.city || address.municipality || 'Current location',
+    street: address.road || address.pedestrian || address.footway || address.path || address.residential || address.living_street || address.service || '',
+    area: address.suburb || address.neighbourhood || address.quarter || address.city_district || address.residential || address.village || address.hamlet || address.locality || '',
+    district: address.state_district || address.district || address.county || address.municipality || '',
+    landmark: address.amenity || address.shop || address.tourism || address.leisure || address.historic || address.building || '',
+    town: address.town || '',
+    postcode: address.postcode || '',
     houseNumber: address.house_number || '',
     subtitle: data.display_name || '',
     address: data.display_name || '',
-    city: address.city || address.town || address.village || address.county || '',
+    city: address.city || address.town || address.village || address.municipality || address.city_district || address.county || '',
     state: address.state || '',
     country: address.country || '',
     pincode: address.postcode || '',

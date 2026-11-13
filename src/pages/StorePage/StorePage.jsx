@@ -14,8 +14,8 @@ import ProductCard from '../../components/ProductCard/ProductCard';
 import CampaignCarousel from '../../components/CampaignCarousel/CampaignCarousel';
 import { AppContext } from '../../context/AppContext';
 import { promotionApplies } from '../../services/promotionScope';
-import { getCachedStoreDeliveryQuote, getPublicStoreProducts } from '../../services/catalogApi';
-import { adaptStoreProductList } from '../../services/catalogAdapter';
+import { getCachedStoreDeliveryQuote, getProduct, getPublicStoreProducts } from '../../services/catalogApi';
+import { adaptProduct, adaptStoreProductList } from '../../services/catalogAdapter';
 import { deliverySummary, GLOBAL_STORE_LISTING, isGlobalProduct, isGlobalStore, isProductEligibleForStore, storeDeliversTo } from '../../utils/storeDelivery';
 import StoreServiceAreaMap from '../../components/StoreServiceAreaMap/StoreServiceAreaMap';
 import './StorePage.css';
@@ -38,8 +38,16 @@ const StorePage = () => {
   useEffect(() => {
     let ignore = false;
     getPublicStoreProducts(storeId, { status: 'ACTIVE' })
-      .then((payload) => {
-        if (!ignore) setStoreProducts(adaptStoreProductList(payload || []).map((item) => ({ ...item, storeId: item.storeId || storeId })));
+      .then(async (payload) => {
+        const mappings = adaptStoreProductList(payload || []).map((item) => ({ ...item, storeId: item.storeId || storeId }));
+        const enriched = await Promise.all(mappings.map(async (item) => {
+          if (item.product || !item.productId) return item;
+          try {
+            const product = adaptProduct(await getProduct(item.productId));
+            return { ...item, product: { ...product, storeId: item.storeId, store: item.storeName, storeName: item.storeName } };
+          } catch { return item; }
+        }));
+        if (!ignore) setStoreProducts(enriched);
       })
       .catch(() => {
         if (!ignore) setStoreProducts([]);
@@ -68,13 +76,14 @@ const StorePage = () => {
     return () => { ignore = true; };
   }, [storeId, customerLat, customerLng]);
   const banners = store ? catalogBanners.filter((item) => item.status === 'Active' && item.image && promotionApplies(item, { location: store.location, store: store.name })) : [];
-  const mappedProductIds = new Set(storeProducts.filter((item) => item.storeId === storeId && item.status !== 'INACTIVE' && item.available !== false).map((item) => item.productId));
+  const mappedProductIds = new Set(storeProducts.filter((item) => item.storeId === storeId && item.status !== 'INACTIVE').map((item) => item.productId));
   const mappedProducts = storeProducts
     .filter((item) => item.product)
-    .map((item) => ({ ...item.product, storeId: item.storeId, store: item.storeName || store?.name, storeName: item.storeName || store?.name }));
+    .map((item) => ({ ...item.product, available: item.available !== false, storeId: item.storeId, store: item.storeName || store?.name, storeName: item.storeName || store?.name }));
   const products = store ? [
     ...mappedProducts.filter((product) => isProductEligibleForStore(product, store)),
     ...catalogProducts.filter((item) => mappedProductIds.has(item.productId) || item.storeId === storeId || item.store === store.name || item.storeName === store.name || (globalStore && isGlobalProduct(item)))
+      .map((product) => ({ ...product, available: storeProducts.find((mapping) => mapping.storeId === storeId && String(mapping.productId) === String(product.productId || product.id))?.available !== false }))
       .filter((product) => isProductEligibleForStore(product, store)),
   ].filter((product, index, items) => product.active !== false && items.findIndex((item) => (item.productId ?? item.id) === (product.productId ?? product.id)) === index) : [];
   const normalizedProductSearch = productSearch.trim().toLowerCase();
@@ -92,6 +101,8 @@ const StorePage = () => {
   const quoteMethods = quote?.methods || [];
   const quoteEta = quote?.estimatedDeliveryMin && quote?.estimatedDeliveryMax ? `${quote.estimatedDeliveryMin}-${quote.estimatedDeliveryMax} min` : '';
   const quoteZone = quote?.matchedZoneLabel ? `${quote.matchedZoneLabel} service area` : '';
+  const quoteRadiusKm = Number(String(quote?.matchedZoneLabel || '').match(/-\s*([\d.]+)\s*KM/i)?.[1]);
+  const radiusLabel = quote?.matchedZoneLabel || delivery.radiusLabel;
   const deliveryModes = quoteMethods.filter((method) => method.available !== false).map((method) => ({
     name: method.deliveryType,
     label: [method.deliveryType, method.estimatedTime, Number(method.deliveryCharge || 0) > 0 ? formatCurrency(method.deliveryCharge) : 'Free'].filter(Boolean).join(' - '),
@@ -103,6 +114,9 @@ const StorePage = () => {
   const customerPoint = Number.isFinite(customerLat) && Number.isFinite(customerLng) && Math.abs(customerLat) <= 90 && Math.abs(customerLng) <= 180 ? { latitude: customerLat, longitude: customerLng } : null;
   const deliveryLocationLabel = selectedLocation?.address || selectedLocation?.subtitle || selectedLocation?.title || defaultAddress.address || '';
   const deliveryChargeLabel = quote?.deliveryCharge != null ? formatCurrency(quote.deliveryCharge) : delivery.chargeLabel;
+  const freeDeliveryLabel = quote?.freeDeliveryAbove != null
+    ? (Number(quote.freeDeliveryAbove) > 0 ? `above ${formatCurrency(quote.freeDeliveryAbove)}` : 'Not available')
+    : delivery.freeLabel.replace('Free ', '');
   const serviceMethodsLabel = quoteMethods.length ? quoteMethods.map((method) => method.deliveryType).join(', ') : delivery.modesLabel;
 
   return <Box className="store-page">
@@ -113,7 +127,7 @@ const StorePage = () => {
       <Box className="store-badges">
         {quote?.distanceKm && <Chip label={`${quote.distanceKm} KM by road`} />}
         {quote?.routeDurationMinutes && <Chip label={`Road travel ~${quote.routeDurationMinutes} min`} />}
-        {store.delivery !== 'No' && <Chip label={quote?.deliveryAvailable ? 'Delivery available' : delivery.radiusLabel} />}
+        {store.delivery !== 'No' && <Chip label={quote?.deliveryAvailable ? 'Delivery available' : radiusLabel} />}
         {store.delivery !== 'No' && <Chip label={quoteEta || delivery.etaLabel} />}
         {store.delivery !== 'No' && <Chip label={quote?.deliveryCharge != null ? `${formatCurrency(quote.deliveryCharge)} delivery charge` : delivery.chargeLabel} />}
         {store.pickup === 'Yes' && <Chip label="Pickup available" />}
@@ -130,14 +144,14 @@ const StorePage = () => {
         <Box className="store-service-heading">
           <Box className="store-service-heading-icon"><PlaceOutlinedIcon /></Box>
           <Box><Typography variant="h6">Store service area</Typography><Typography>{store.name}</Typography></Box>
-          <Chip label={globalStore ? 'India-wide delivery' : delivery.radiusLabel} size="small" />
+          <Chip label={globalStore ? 'India-wide delivery' : radiusLabel} size="small" />
         </Box>
         <Typography className="store-service-address">{store.address || [store.area, store.city || store.location, store.state, store.pincode].filter(Boolean).join(', ')}</Typography>
         {globalStore ? <Typography className="store-selected-location">Global products ship nationwide.</Typography> : deliveryLocationLabel && <Typography className="store-selected-location">Delivering to: {deliveryLocationLabel}</Typography>}
         <Box className="store-service-metrics">
           <Box><AccessTimeOutlinedIcon /><span><small>Delivery time</small><b>{quoteEta || delivery.etaLabel}</b></span></Box>
           <Box><LocalShippingOutlinedIcon /><span><small>Delivery fee</small><b>{deliveryChargeLabel}</b></span></Box>
-          <Box><PaymentsOutlinedIcon /><span><small>Free delivery</small><b>{delivery.freeLabel.replace('Free ', '')}</b></span></Box>
+          <Box><PaymentsOutlinedIcon /><span><small>Free delivery</small><b>{freeDeliveryLabel}</b></span></Box>
         </Box>
         {(quoteZone || quote?.distanceKm || quote?.routeDurationMinutes) && <Typography className="store-service-quote">{[quoteZone, quote?.distanceKm ? `${quote.distanceKm} km by road` : '', quote?.routeDurationMinutes ? `~${quote.routeDurationMinutes} min drive` : ''].filter(Boolean).join(' · ')}</Typography>}
         {store.deliveryNotes && <Typography className="store-service-notes">{store.deliveryNotes}</Typography>}
@@ -147,7 +161,7 @@ const StorePage = () => {
       {globalStore ? <Box className="store-radius-map store-map-empty">Available for delivery across India.</Box> : hasMapPoint ? <StoreServiceAreaMap
         key={`${store.id}:${customerPoint?.latitude ?? ''}:${customerPoint?.longitude ?? ''}`}
         store={store}
-        radiusKm={store.deliveryRadiusKm}
+        radiusKm={Number.isFinite(quoteRadiusKm) && quoteRadiusKm > 0 ? quoteRadiusKm : store.deliveryRadiusKm}
         routePoints={routePoints}
         customerPoint={customerPoint}
       /> : <Box className="store-radius-map store-map-empty">Store coordinates are not available for this map.</Box>}
@@ -161,8 +175,10 @@ const StorePage = () => {
           value={productSearch}
           onChange={(event) => setProductSearch(event.target.value)}
           placeholder="Search products in this store"
-          inputProps={{ 'aria-label': 'Search products in this store' }}
-          InputProps={{ startAdornment: <InputAdornment position="start"><SearchOutlinedIcon /></InputAdornment> }}
+          slotProps={{
+            htmlInput: { 'aria-label': 'Search products in this store' },
+            input: { startAdornment: <InputAdornment position="start"><SearchOutlinedIcon /></InputAdornment> },
+          }}
         />
       </Box>
       {visibleProducts.length ? <Box className="store-product-grid">{visibleProducts.map((product) => <ProductCard key={product.productId || product.id} {...product} storeId={store.id} store={store.name} storeName={store.name} deliveryQuote={quote} deliveryMode={deliveryMode} />)}</Box> : <Box className="store-empty"><Typography>{normalizedProductSearch ? `No products match “${productSearch.trim()}” in this store.` : 'No products are currently assigned to this store.'}</Typography></Box>}

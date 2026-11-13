@@ -159,7 +159,7 @@ const DeliveryNavigationPage = () => {
           {completed ? <Alert severity="success" sx={{ mt: 2 }}>{otpNotice}</Alert> : <>
             {otpError && <Alert severity="error" sx={{ mt: 2 }} role="alert">{otpError}</Alert>}
             {otpNotice && <Alert severity="info" sx={{ mt: 2 }}>{otpNotice}</Alert>}
-            <TextField fullWidth autoFocus sx={{ mt: 2 }} label="Customer OTP" value={otp} error={Boolean(otpError)} helperText={otpError || 'Six digits'} slotProps={{ htmlInput: { inputMode: 'numeric', pattern: '[0-9]*', maxLength: 6, autoComplete: 'one-time-code' } }} onChange={(event) => { setOtp(otpValue(event.target.value)); setOtpError(''); }} onKeyDown={(event) => { if (event.key === 'Enter') verify(); }} />
+            <TextField fullWidth autoFocus sx={{ mt: 2 }} label="Customer OTP" value={otp} error={Boolean(otpError)} helperText="Six digits" slotProps={{ htmlInput: { inputMode: 'numeric', pattern: '[0-9]*', maxLength: 6, autoComplete: 'one-time-code' } }} onChange={(event) => { setOtp(otpValue(event.target.value)); setOtpError(''); }} onKeyDown={(event) => { if (event.key === 'Enter') verify(); }} />
             <Box className="nav-otp-actions"><Button variant="outlined" disabled={otpBusy} onClick={resend}>Resend OTP</Button><Button variant="contained" disabled={otpBusy || otp.length !== 6} onClick={verify}>{otpBusy ? 'Checking…' : 'Verify and complete'}</Button></Box>
           </>}
         </Box>

@@ -1,3 +1,5 @@
+import { isGlobalProduct, isGlobalStore, storeDeliversTo } from '../utils/storeDelivery.js';
+
 const productKey = (product = {}) => product.productId || product.id || product.product_id || '';
 
 const storeInfo = (product = {}) => {
@@ -26,4 +28,18 @@ export const resolveProductStore = (product = {}, catalogProducts = []) => {
     || (product.title && item.title === product.title)
     || (product.productName && item.name === product.productName));
   return storeInfo(match || {});
+};
+export const resolveProductStoreForLocation = ({ product = {}, requestedStore = null, availableStores = [], stores = [], location = null } = {}) => {
+  if (requestedStore?.storeId || requestedStore?.storeName) {
+    if (isGlobalStore(requestedStore)) return storeInfo(requestedStore);
+    const requestedDirectoryStore = stores.find((store) => String(store.id) === String(requestedStore.storeId));
+    if (requestedDirectoryStore && storeDeliversTo(requestedDirectoryStore, location)) {
+      return { ...storeInfo(requestedStore), ...requestedDirectoryStore, storeId: requestedDirectoryStore.id };
+    }
+  }
+  if (isGlobalProduct(product)) return { storeId: 'global-store', store: 'India-wide Global Store', storeName: 'India-wide Global Store' };
+  return availableStores.map((entry) => {
+    const directoryStore = stores.find((store) => String(store.id) === String(entry.storeId));
+    return directoryStore ? { ...entry, ...directoryStore, storeId: directoryStore.id } : entry;
+  }).find((entry) => isGlobalStore(entry) || storeDeliversTo(entry, location)) || null;
 };

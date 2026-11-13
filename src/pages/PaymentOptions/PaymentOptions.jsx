@@ -98,7 +98,11 @@ const PaymentOptions = () => {
   const location = useLocation();
   const { activeCart, addresses, cartItems, clearCartAfterCheckout, formatCurrency, user, catalogStores, catalogProducts } = useContext(AppContext);
   const customerId = tokenCustomerId() || user?.id || '';
-  const checkout = useMemo(() => location.state?.checkout || {}, [location.state]);
+  const checkout = useMemo(() => {
+    if (location.state?.checkout) return location.state.checkout;
+    try { return JSON.parse(sessionStorage.getItem('metaarch.checkoutDraft') || '{}'); } catch { return {}; }
+  }, [location.state]);
+  useEffect(() => { if (Object.keys(checkout).length) sessionStorage.setItem('metaarch.checkoutDraft', JSON.stringify(checkout)); }, [checkout]);
   const existingOrderId = location.state?.orderId || location.state?.order?.id || '';
   const existingOrder = useMemo(() => location.state?.order ? normalizeOrder(location.state.order) : null, [location.state]);
   const [preferredMethod,setMethod] = useState('cod');
@@ -215,7 +219,7 @@ const PaymentOptions = () => {
     const hasGlobalLine = deliveryLines.some((line) => line.fulfillmentType === 'global') || ['global','mixed'].includes(checkout.fulfillmentType);
     const useLocalSplitOrder = hasGlobalLine || splitKeys.length > 1;
     if (useLocalSplitOrder) {
-      const defaultAddress = addresses.find((address) => address.isDefault) || addresses[0] || {};
+      const defaultAddress = checkout.selectedAddressSnapshot || addresses.find((address) => address.id === checkout.selectedAddressId) || addresses.find((address) => address.isDefault) || addresses[0] || {};
       const groups = splitGroupsFor(cartItems, deliveryLines);
       if(checkout.coupon && groups.length>1) throw new Error('Coupon checkout requires the verified combined checkout service. Please retry after combined checkout is available.');
         const childOrders = await Promise.all(groups.map(async (group, index) => {
@@ -234,7 +238,7 @@ const PaymentOptions = () => {
             cartId: serverCart.id,
             storeId: orderStoreId,
             items: buildOrderItemsPayload(group.items),
-            addresses: buildOrderAddressesPayload(defaultAddress, checkout.deliveryAddress, { name: user?.name, phone: checkout.contactNumber || user?.phone || user?.mobile }),
+            addresses: buildOrderAddressesPayload({ ...defaultAddress, selectedAddressId: checkout.selectedAddressId }, checkout.deliveryAddress, { name: user?.name, phone: checkout.contactNumber || user?.phone || user?.mobile }),
             notes: checkout.notes || '',
             deliveryZoneId: deliveryQuote.deliveryZoneId || null,
             calculatedDistanceKm: deliveryQuote.distanceKm || null,
@@ -282,7 +286,7 @@ const PaymentOptions = () => {
         const combinedTotal = childOrders.reduce((total, order) => total + Number(order.totalAmount || order.total || 0), 0);
         return { ...childOrders[0], totalAmount:combinedTotal, total:combinedTotal, childOrders };
     }
-    const defaultAddress = addresses.find((address) => address.isDefault) || addresses[0] || {};
+    const defaultAddress = checkout.selectedAddressSnapshot || addresses.find((address) => address.id === checkout.selectedAddressId) || addresses.find((address) => address.isDefault) || addresses[0] || {};
     const deliveryQuote = checkout.deliveryQuote || {};
     const primaryLine = deliveryLines[0] || {};
     const storeId = resolveCheckoutStoreId({ activeCart, checkout, cartItems }) || primaryLine.storeId;
@@ -293,7 +297,7 @@ const PaymentOptions = () => {
         cartId: serverCart.id,
         storeId,
         items: buildOrderItemsPayload(cartItems),
-        addresses: buildOrderAddressesPayload(defaultAddress, checkout.deliveryAddress, { name: user?.name, phone: checkout.contactNumber || user?.phone || user?.mobile }),
+        addresses: buildOrderAddressesPayload({ ...defaultAddress, selectedAddressId: checkout.selectedAddressId }, checkout.deliveryAddress, { name: user?.name, phone: checkout.contactNumber || user?.phone || user?.mobile }),
         notes: checkout.notes || '',
         deliveryZoneId: deliveryQuote.deliveryZoneId || null,
         calculatedDistanceKm: deliveryQuote.distanceKm || null,
@@ -344,7 +348,7 @@ const PaymentOptions = () => {
     if (status === 'submitting' || submissionBusy.current) return;
     if (checkoutBlock) return;
     const selectedPaymentMethod = selectableMethods.find((item) => item.id === method)?.paymentMethod || 'DEMO_COD';
-    if (!existingOrderId && selectedPaymentMethod === 'DEMO_COD') {
+    if (!existingOrderId && selectedPaymentMethod === 'DEMO_COD' && !(persistedMultiStore && multiStoreCart)) {
       const validation = validate(retrySaved);
       if (validation) { setError(validation); setStatus('failed'); return; }
       submissionBusy.current = true;
@@ -368,6 +372,7 @@ const PaymentOptions = () => {
         if (!existingOrderId) {
           for (const storeOrder of order.childOrders || [order]) finishCheckoutCart(customerId, storeOrder.storeId);
           if (!retrySaved) clearCartAfterCheckout();
+          sessionStorage.removeItem('metaarch.checkoutDraft');
         }
         setResult({ order, payment: { ...(pendingPayment || {}), status: pendingPayment?.status || 'PENDING', amount: payableAmount, paymentMethod: pendingPayment?.paymentMethod || selectedPaymentMethod, paymentId: pendingPayment?.paymentId || '' } });
         sessionStorage.setItem(COMPLETED_CHECKOUT_RETURN_KEY, order.id);
@@ -403,17 +408,36 @@ const PaymentOptions = () => {
           return stores;
         }, []);
         const stores = groups.map((group,index) => ({
+          ...(() => {
+            const quote = group.line.quote || {};
+            const isPickup = group.line.deliveryType === 'pickup' || group.line.fulfillmentType === 'pickup';
+            return {
+              deliveryZoneId: isPickup ? null : quote.deliveryZoneId || null,
+              calculatedDistanceKm: isPickup ? null : quote.distanceKm || null,
+              routeDistanceMeters: isPickup ? null : quote.routeDistanceMeters || null,
+              routeDurationSeconds: isPickup ? null : quote.routeDurationSeconds || null,
+              routeDurationMinutes: isPickup ? null : quote.routeDurationMinutes || null,
+              matchedZoneLabel: isPickup ? null : quote.matchedZoneLabel || null,
+              storeLatitude: quote.storeLatitude ?? null,
+              storeLongitude: quote.storeLongitude ?? null,
+              estimatedDeliveryMin: isPickup ? null : quote.estimatedDeliveryMin || null,
+              estimatedDeliveryMax: isPickup ? null : quote.estimatedDeliveryMax || null,
+              freeDeliveryAbove: isPickup ? null : quote.freeDeliveryAbove || null,
+              freeDeliveryApplied: !isPickup && Boolean(quote.freeDeliveryApplied),
+              scheduledDeliveryDate: group.line.scheduleDate || null,
+              scheduledDeliverySlot: group.line.scheduleSlot || null,
+              pickupDetails: isPickup ? group.line.pickupDetails || null : null,
+            };
+          })(),
           customerId,
           storeId: group.storeId,
           items: buildOrderItemsPayload(group.items),
-          addresses: buildOrderAddressesPayload(address, checkout.deliveryAddress, { name: user.name, phone: checkout.contactNumber || user.phone || user.mobile }),
+          addresses: buildOrderAddressesPayload({ ...(checkout.selectedAddressSnapshot || address), selectedAddressId: checkout.selectedAddressId }, checkout.deliveryAddress, { name: user.name, phone: checkout.contactNumber || user.phone || user.mobile }),
           deliveryMethod: group.line.fulfillmentType === 'global' ? 'global' : group.line.selectedDeliveryMethod || group.line.deliveryType || checkout.method || 'standard',
           fulfillmentType: group.line.fulfillmentType === 'global' ? 'global' : group.line.deliveryType === 'pickup' || checkout.method === 'pickup' ? 'pickup' : 'nearby',
           deliveryCharge: group.line.deliveryType === 'pickup' || checkout.method === 'pickup' ? 0 : Number(group.line.deliveryCharge ?? (groups.length === 1 ? checkout.deliveryFee : 0) ?? 0),
           customerLatitude: checkout.customerLatitude ?? null,
           customerLongitude: checkout.customerLongitude ?? null,
-          scheduledDeliveryDate: checkout.date || null,
-          scheduledDeliverySlot: checkout.slot || null,
           couponCode:index===0?(checkout.coupon||''):'',
           promotionLocation:promotionLocationFor(checkout),
         }));
@@ -447,6 +471,7 @@ const PaymentOptions = () => {
         if (!existingOrderId) {
           finishCheckoutCart(customerId, order.storeId);
           if (!retrySaved) clearCartAfterCheckout();
+          sessionStorage.removeItem('metaarch.checkoutDraft');
         }
         setResult({ order, payment: { status: 'PENDING', amount: payableAmount, paymentMethod, paymentId: '' } });
         sessionStorage.setItem(COMPLETED_CHECKOUT_RETURN_KEY, order.id);
@@ -486,7 +511,9 @@ const PaymentOptions = () => {
         }
         if (!existingOrderId) {
           finishCheckoutCart(customerId, order.storeId);
+          clearCartAfterCheckout();
         }
+        sessionStorage.removeItem('metaarch.checkoutDraft');
         setResult({ order: paidOrder, payment: latestPayment });
         sessionStorage.setItem(COMPLETED_CHECKOUT_RETURN_KEY, order.id);
         setStatus('succeeded');
@@ -513,7 +540,7 @@ const PaymentOptions = () => {
   return <Box className="payment-shell">
     <header className="payment-header">
       <Box className="payment-header-left">
-        <Button aria-label="Back" onClick={() => navigate(-1)}><ArrowBackIcon /></Button>
+        <Button aria-label="Back" onClick={() => navigate('/checkout', { state: { checkout } })}><ArrowBackIcon /></Button>
         <span className="payment-header-lock"><LockOutlinedIcon /></span>
         <Box><strong>Secure Checkout</strong><small>Your information is safe and secure</small></Box>
       </Box>

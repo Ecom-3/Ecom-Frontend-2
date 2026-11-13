@@ -1,3 +1,5 @@
+import { isValidImageUrl, normalizeImageUrl } from '../../utils/imageUrl.js';
+
 export const slugifyProductName = (value = '') => String(value)
   .normalize('NFKD')
   .replace(/[\u0300-\u036f]/g, '')
@@ -25,7 +27,7 @@ export const validateStoreManagerProductForm = (form = {}) => {
     }
   });
   (form.images || []).forEach((image, index) => {
-    if (String(image.url || '').trim() && !/^https?:\/\//i.test(String(image.url).trim())) errors.images = `Image ${index + 1} must use an HTTP or HTTPS URL.`;
+    if (String(image.url || '').trim() && !isValidImageUrl(image.url)) errors.images = `Image ${index + 1} must be a Google Drive image link shared with anyone who has the link.`;
   });
   return errors;
 };
@@ -40,7 +42,7 @@ export const toStoreManagerVariantPayload = (variant = {}) => ({
 });
 
 export const toStoreManagerImagePayload = (image = {}, index = 0) => ({
-  url: String(image.url || '').trim(),
+  url: normalizeImageUrl(image.url),
   altText: String(image.altText || '').trim(),
   displayOrder: index,
   primaryImage: index === 0,

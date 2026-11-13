@@ -19,7 +19,17 @@ import NotificationHistoryPanel from '../../components/NotificationHistoryPanel/
 import { useFulfillmentTracking } from '../../hooks/useFulfillmentTracking';
 import './OrderDetailViewPage.css';
 
-const formatAddress = (address) => address ? [address.addressLine1, address.city, address.state, address.country, address.postalCode].filter(Boolean).join(', ') : '';
+const formatAddress = (address) => {
+  if (!address) return '';
+  const values = [address.addressLine1 || address.address || address.street, address.addressLine2, address.city, address.state, address.postalCode, address.country];
+  const seen = new Set();
+  return values.flatMap((part) => String(part || '').split(',')).map((part) => part.trim()).filter((part) => {
+    const key = part.toLocaleLowerCase();
+    if (!part || seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  }).join(', ');
+};
 const OrderDetailViewPage = () => {
   const navigate = useNavigate();
   const location = useLocation();
@@ -155,7 +165,7 @@ const OrderDetailViewPage = () => {
     <Box className="order-detail-wrapper">
       <Header />
       <Box className="order-detail-header">
-        <IconButton aria-label="Back to previous page" onClick={() => navigate(-1)} style={{ color: '#ffffff' }}><ArrowBackIcon /></IconButton>
+        <IconButton aria-label="Back to orders" onClick={() => navigate('/orders', { replace: true })} style={{ color: '#ffffff' }}><ArrowBackIcon /></IconButton>
         <Box sx={{ minWidth: 0, flex: 1 }}>
           <Typography variant="h6" className="order-detail-title" sx={{ overflowWrap: 'anywhere' }}>Order #{order.orderNumber || order.id}</Typography>
           <Typography variant="caption">{date} | {order.items.length} item{order.items.length === 1 ? '' : 's'} | {formatCurrency(price)}</Typography>

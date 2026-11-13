@@ -2,27 +2,33 @@ import DeliveryPartners from './DeliveryPartners';
 import { useManagerOrders } from '../../hooks/useManagerOrders';
 import { storeManagerNavItems as navItems } from '../../config/storeManagerNavigation';
 import { useContext, useEffect, useState } from 'react';
-import { Alert, Avatar, Box, Button, Checkbox, Chip, CircularProgress, Dialog, DialogActions, DialogContent, DialogTitle, FormControlLabel, MenuItem, Select, TextField, Typography } from '@mui/material';
+import { Alert, Autocomplete, Avatar, Box, Button, Checkbox, Chip, CircularProgress, Dialog, DialogActions, DialogContent, DialogTitle, FormControlLabel, MenuItem, Select, TextField, Typography } from '@mui/material';
 import MenuIcon from '@mui/icons-material/Menu';
 import StorefrontOutlinedIcon from '@mui/icons-material/StorefrontOutlined';
+import LocationOnOutlinedIcon from '@mui/icons-material/LocationOnOutlined';
+import MyLocationOutlinedIcon from '@mui/icons-material/MyLocationOutlined';
+import LayersOutlinedIcon from '@mui/icons-material/LayersOutlined';
+import LocalShippingOutlinedIcon from '@mui/icons-material/LocalShippingOutlined';
 import { useNavigate } from 'react-router-dom';
 import { AppContext } from '../../context/AppContext';
-import { clearDeliveryQuoteCache, createImage, createStoreDeliveryZone, createStoreManagerProduct, createVariant, deleteImage, deleteStoreDeliveryZone, deleteStoreManagerProduct, deleteVariant, getCategories, getStore, getStoreDeliveryZones, getStoreManagerProducts, getStoreProducts, getStores, setStoreManagerProductAvailability, updateImage, updateStore, updateStoreDeliveryZone, updateStoreManagerProduct, updateVariant } from '../../services/catalogApi';
-import { adaptStoreProduct } from '../../services/catalogAdapter.js';
+import { clearDeliveryQuoteCache, createImage, createStoreDeliveryZone, createStoreManagerProduct, createVariant, deleteImage, deleteStoreDeliveryZone, deleteStoreManagerProduct, deleteVariant, getCategories, getProduct, getStore, getStoreDeliveryZones, getStoreManagerProducts, getStoreProducts, getStores, setStoreManagerProductAvailability, updateStoreProduct, updateImage, updateStore, updateStoreDeliveryZone, updateStoreManagerProduct, updateVariant } from '../../services/catalogApi';
+import { adaptProduct, adaptStoreProduct } from '../../services/catalogAdapter.js';
 import { collectionStore, staffProfileStore } from '../../services/localDataService';
 import { validateStaffPasswordChange } from '../../utils/staffPasswordValidation.js';
 import { profileModeRequiresAssignedStore, profileModeWaitsForAssignedStore } from '../../utils/storeManagerProfileMode.js';
-import { DELIVERY_MODE_OPTIONS } from '../../utils/storeDelivery';
 import { summarizeOrders } from '../AdminWorkspace/adminReportData.js';
+import { DELIVERY_MODE_OPTIONS } from '../../utils/storeDelivery.js';
 import { toStoreManagerImagePayload, toStoreManagerProductPayload, toStoreManagerVariantPayload, validateStoreManagerProductForm } from './storeManagerProductForm.js';
 import logo from '../../assets/images/logo.png';
 import SafeProductImage from '../../components/SafeProductImage/SafeProductImage';
+import PasswordField from '../../components/PasswordField.jsx';
 import './StoreManagerPortal.css';
+import './DeliveryRadius.css';
 
 
 
-const numberOrNull = (value) => value === '' || value === null || value === undefined ? null : Number(value);
 const money = (value) => Number(value || 0).toLocaleString('en-IN', { style:'currency', currency:'INR', maximumFractionDigits:0 });
+const numberOrNull = (value) => value === '' || value === null || value === undefined ? null : Number(value);
 const zoneLabel = (zone) => `${Number(zone.minRadiusKm || 0).toFixed(Number(zone.minRadiusKm || 0) % 1 ? 1 : 0)}-${Number(zone.maxRadiusKm || zone.radiusKm || 0).toFixed(Number(zone.maxRadiusKm || zone.radiusKm || 0) % 1 ? 1 : 0)} KM`;
 const etaLabel = (zone, method) => method?.estimatedTime || [zone.estimatedDeliveryMin, zone.estimatedDeliveryMax].filter(Boolean).join('-') + (zone.estimatedDeliveryMin || zone.estimatedDeliveryMax ? ' min' : '');
 const TILE_SIZE = 256;
@@ -186,10 +192,17 @@ const fetchStoreProducts = async (storeId) => {
     getStoreProducts(storeId, { size:200, sort:'name,asc' }),
   ]);
   const ownedProducts = Array.isArray(managerResponse) ? managerResponse : managerResponse?.content || managerResponse?.items || [];
-  const assignedProducts = (Array.isArray(assignedResponse) ? assignedResponse : assignedResponse?.content || assignedResponse?.items || [])
+  const assignedProducts = (await Promise.all((Array.isArray(assignedResponse) ? assignedResponse : assignedResponse?.content || assignedResponse?.items || [])
     .map(adaptStoreProduct)
-    .filter((mapping) => mapping.storeId === storeId && mapping.product)
-    .map((mapping) => ({ ...mapping.product, id:mapping.productId || mapping.product.id, storeProductId:mapping.id, locationAvailable:mapping.available, managerOwned:false }));
+    .filter((mapping) => mapping.storeId === storeId && mapping.productId)
+    .map(async (mapping) => {
+      let product = mapping.product;
+      if (!product) {
+        try { product = adaptProduct(await getProduct(mapping.productId, { auth:true })); }
+        catch { return null; }
+      }
+      return { ...product, id:mapping.productId || product.id, storeProductId:mapping.id, priceOverride:mapping.priceOverride, locationAvailable:mapping.available, managerOwned:false };
+    }))).filter(Boolean);
   const byId = new Map(assignedProducts.map((product) => [String(product.id), product]));
   ownedProducts.forEach((product) => byId.set(String(product.id), { ...product, managerOwned:true }));
   return [...byId.values()].sort((a, b) => String(a.name || '').localeCompare(String(b.name || '')));
@@ -210,6 +223,12 @@ const StoreManagerProductsPage = () => {
   const [form, setForm] = useState(blankManagerProduct());
   const [errors, setErrors] = useState({});
   const [deleting, setDeleting] = useState(null);
+  const productFieldSuggestions = (key) => {
+    const presets = { subcategory:['Pickles','Spices','Dry Fruits','Snacks','Masala','Other'], pack:['100 g','200 g','250 g','500 g','1 kg','Pack of 1','Pack of 2'], type:['Vegetarian','Non-vegetarian','Organic','Regular'], shelfLife:['3 months','6 months','9 months','12 months'] };
+    const values = products.flatMap((product) => { const value = product[key]; return key === 'tags' ? (Array.isArray(value) ? value : String(value || '').split(',')) : Array.isArray(value) ? value : [value]; });
+    return [...new Set([...(presets[key] || []), ...values].map((value) => String(value || '').trim()).filter(Boolean))].sort((left, right) => left.localeCompare(right));
+  };
+  const renderProductSuggestion = (key, label) => <Autocomplete freeSolo options={productFieldSuggestions(key)} value={form[key] || ''} onChange={(_, value) => setField(key, value || '')} onInputChange={(_, value, reason) => { if (reason === 'input') setField(key, value); }} renderInput={(params) => <TextField {...params} label={label} placeholder="Choose a suggestion or type a new value"/>}/>;
 
   const loadStoreProducts = async () => {
     const products = await fetchStoreProducts(store?.id);
@@ -329,7 +348,8 @@ const StoreManagerProductsPage = () => {
   const toggleAvailability = async (product) => {
     setError('');
     try {
-      await setStoreManagerProductAvailability(product.id, product.locationAvailable === false);
+      if (product.managerOwned) await setStoreManagerProductAvailability(product.id, product.locationAvailable === false);
+      else await updateStoreProduct(product.storeProductId, { storeId:store.id, storeName:store.name, productId:product.id, available:product.locationAvailable === false, priceOverride:product.priceOverride ?? null });
       try { await reloadProducts(); }
       catch { setError('Availability was saved, but the list could not be refreshed. Reload the page to see the latest data.'); }
     } catch (reason) {
@@ -358,7 +378,7 @@ const StoreManagerProductsPage = () => {
         {visibleProducts.map((product) => <Box key={product.id} sx={{ display:'flex', alignItems:'center', gap:2, p:2, border:'1px solid #d8e4df', borderRadius:2, bgcolor:'#fff', flexWrap:'wrap' }}>
           {product.images?.[0]?.url && <img src={product.images[0].url} alt="" style={{ width:56, height:56, objectFit:'cover', borderRadius:8 }}/>}
           <Box sx={{ flex:1, minWidth:180 }}><Typography fontWeight={800}>{product.name}</Typography><Typography variant="body2" color="text.secondary">{product.sku} · {product.categoryName || 'Uncategorized'}{product.brand ? ` · ${product.brand}` : ''}</Typography></Box>
-          <Chip size="small" label={product.status}/>
+          <Chip size="small" label={product.locationAvailable === false ? 'UNAVAILABLE' : product.status}/>
           <Button size="small" variant={product.locationAvailable === false ? 'outlined' : 'contained'} onClick={() => toggleAvailability(product)}>{product.locationAvailable === false ? 'Unavailable' : 'Available'}</Button>
           {product.managerOwned && <><Button size="small" onClick={() => openEdit(product)}>Edit</Button><Button size="small" color="error" onClick={() => setDeleting(product)}>Delete</Button></>}
         </Box>)}
@@ -372,20 +392,20 @@ const StoreManagerProductsPage = () => {
         </TextField>
         <TextField label="Product name" value={form.name || ''} onChange={(event) => setField('name', event.target.value)} error={Boolean(errors.name)} helperText={errors.name}/>
         <TextField label="SKU" value={form.sku || ''} onChange={(event) => setField('sku', event.target.value)} error={Boolean(errors.sku)} helperText={errors.sku}/>
-        <TextField label="Brand" value={form.brand || ''} onChange={(event) => setField('brand', event.target.value)}/>
+        {renderProductSuggestion('brand', 'Brand')}
         <TextField label="URL slug (optional)" value={form.slug || ''} onChange={(event) => setField('slug', event.target.value)}/>
-        <TextField label="Subcategory" value={form.subcategory || ''} onChange={(event) => setField('subcategory', event.target.value)}/>
-        <TextField label="Pack" value={form.pack || ''} onChange={(event) => setField('pack', event.target.value)}/>
-        <TextField label="Product type" value={form.type || ''} onChange={(event) => setField('type', event.target.value)}/>
-        <TextField label="Shelf life" value={form.shelfLife || ''} onChange={(event) => setField('shelfLife', event.target.value)}/>
+        {renderProductSuggestion('subcategory', 'Subcategory')}
+        {renderProductSuggestion('pack', 'Pack')}
+        {renderProductSuggestion('type', 'Product type')}
+        {renderProductSuggestion('shelfLife', 'Shelf life')}
         <TextField select label="Status" value={form.status || 'ACTIVE'} onChange={(event) => setField('status', event.target.value)}>
           <MenuItem value="ACTIVE">Active</MenuItem><MenuItem value="DRAFT">Draft</MenuItem>
         </TextField>
         <TextField label="Description" multiline minRows={2} value={form.description || ''} onChange={(event) => setField('description', event.target.value)} sx={{ gridColumn:{ sm:'1 / -1' } }}/>
-        <TextField label="Ingredients" multiline minRows={2} value={form.ingredients || ''} onChange={(event) => setField('ingredients', event.target.value)}/>
+        <TextField label="Nutrition" multiline minRows={2} value={form.ingredients || ''} onChange={(event) => setField('ingredients', event.target.value)}/>
         <TextField label="Specifications" multiline minRows={2} value={form.specifications || ''} onChange={(event) => setField('specifications', event.target.value)}/>
         <TextField label="Highlights" multiline minRows={2} value={form.highlights || ''} onChange={(event) => setField('highlights', event.target.value)}/>
-        <TextField label="Tags" value={form.tags || ''} onChange={(event) => setField('tags', event.target.value)}/>
+        {renderProductSuggestion('tags', 'Tags')}
         <Box sx={{ gridColumn:{ sm:'1 / -1' }, border:'1px solid #d8e4df', borderRadius:2, p:2, display:'grid', gap:1.5 }}>
           <Box sx={{ display:'flex', justifyContent:'space-between', alignItems:'center', gap:1 }}><Typography fontWeight={800}>Variants and prices</Typography><Button size="small" onClick={() => setField('variants', [...(form.variants || []), { sku:'', name:'', attributes:'', price:'', compareAtPrice:'', active:true }])}>Add Variant</Button></Box>
           {errors.variants && <Alert severity="error">{errors.variants}</Alert>}
@@ -403,7 +423,7 @@ const StoreManagerProductsPage = () => {
           <Box sx={{ display:'flex', justifyContent:'space-between', alignItems:'center', gap:1 }}><Typography fontWeight={800}>Product images</Typography><Button size="small" onClick={() => setField('images', [...(form.images || []), { url:'', altText:'' }])}>Add Image</Button></Box>
           {errors.images && <Alert severity="error">{errors.images}</Alert>}
           {(form.images || []).map((image, index) => <Box key={image.id || `image-${index}`} sx={{ display:'grid', gridTemplateColumns:{ xs:'1fr', sm:'2fr 1fr auto' }, gap:1, alignItems:'center' }}>
-            <TextField size="small" type="url" label="Image URL" value={image.url || ''} onChange={(event) => updateAsset('images', index, 'url', event.target.value)} placeholder="https://…"/>
+            <TextField size="small" type="url" label="Google Drive image URL" value={image.url || ''} onChange={(event) => updateAsset('images', index, 'url', event.target.value)} placeholder="Paste a Google Drive image link" helperText="Share the image so anyone with the link can view it."/>
             <TextField size="small" label="Alt text" value={image.altText || ''} onChange={(event) => updateAsset('images', index, 'altText', event.target.value)}/>
             <Button color="error" size="small" onClick={() => setField('images', form.images.filter((_, itemIndex) => itemIndex !== index))}>Remove</Button>
           </Box>)}
@@ -452,10 +472,6 @@ const StoreProfilePage = ({ mode = 'profile' }) => {
           phone: form.mobile,
           deliveryEnabled: form.delivery !== 'No',
           pickupEnabled: form.pickup !== 'No',
-          deliveryRadiusKm: numberOrNull(form.deliveryRadiusKm),
-          deliveryEtaMinutes: numberOrNull(form.deliveryEtaMinutes),
-          deliveryCharge: numberOrNull(form.deliveryCharge),
-          freeDeliveryAbove: numberOrNull(form.freeDeliveryAbove),
           isNew: form.storeType === 'New',
           active: form.status !== 'Inactive',
         }));
@@ -475,7 +491,7 @@ const StoreProfilePage = ({ mode = 'profile' }) => {
   const fields = isPassword
     ? [['currentPassword', 'Current Password', 'password'], ['newPassword', 'New Password', 'password'], ['confirmPassword', 'Confirm Password', 'password']]
     : isSettings
-      ? [['delivery', 'Delivery Enabled', 'select', ['Yes', 'No']], ['pickup', 'Store Pickup Enabled', 'select', ['Yes', 'No']], ['deliveryEtaMinutes', 'Default Preparation / ETA Minutes', 'number'], ['deliveryNotes', 'General Delivery Notes', 'textarea'], ['status', 'Store Status', 'select', ['Active', 'Inactive', 'Temporarily Closed']]]
+      ? [['delivery', 'Delivery Enabled', 'select', ['Yes', 'No']], ['pickup', 'Store Pickup Enabled', 'select', ['Yes', 'No']], ['status', 'Store Status', 'select', ['Active', 'Inactive', 'Temporarily Closed']]]
       : [['name', 'Store Name'], ['storeCode', 'Store Code'], ['description', 'Description', 'textarea'], ['managerName', 'Manager Name'], ['mobile', 'Mobile Number'], ['alternatePhone', 'Alternate Mobile'], ['email', 'Email'], ['doorNumber', 'Door Number'], ['streetName', 'Road / Street'], ['area', 'Area'], ['landmark', 'Landmark'], ['city', 'City'], ['district', 'District'], ['state', 'State'], ['pincode', 'Pincode'], ['latitude', 'Latitude', 'number'], ['longitude', 'Longitude', 'number'], ['gstNumber', 'GST Number'], ['storeType', 'Store Type', 'select', ['New', 'Old']], ['pickup', 'Store Pickup Available', 'select', ['Yes', 'No']], ['delivery', 'Delivery Available', 'select', ['Yes', 'No']], ['status', 'Store Status', 'select', ['Active', 'Inactive', 'Temporarily Closed']]];
   return <StoreManagerShell active={mode === 'delivery-settings' ? 'delivery-settings' : mode === 'change-password' ? 'change-password' : 'profile'} store={store}>
     <Box className="sm-page-title"><Box><Typography variant="h4">{isPassword ? 'Change Password' : isSettings ? 'Delivery Settings' : 'Store Profile'}</Typography><Typography>{store?.name || 'Assigned store'}</Typography></Box>{!isPassword && !isSettings && <Chip label={store?.status || 'Active'} color={store?.status === 'Inactive' ? 'default' : 'success'}/>}</Box>
@@ -485,7 +501,7 @@ const StoreProfilePage = ({ mode = 'profile' }) => {
       {!isPassword && <section className="sm-profile-hero"><Box className="sm-store-logo">{store.logoUrl ? <SafeProductImage src={store.logoUrl} fallback={logo} alt="Store logo"/> : <StorefrontOutlinedIcon/>}</Box><Box><Typography variant="h5">{store.name || 'Fresh Mart'}</Typography><Typography>{store.id} {store.storeCode ? `/ ${store.storeCode}` : ''}</Typography></Box><Button variant="outlined" onClick={() => setEditing((value) => !value)}>{editing ? 'Cancel Edit' : 'Edit Profile'}</Button></section>}
       {!isSettings && !isPassword && <StoreMap store={form} rules={[]} />}
       <section className="sm-form-grid">
-        {fields.map(([key, label, type = 'text', options = []]) => <Box key={key}>{type === 'select' ? <Select fullWidth disabled={!editing && !isPassword && !isSettings} value={form[key] || ''} onChange={(event) => change(key, event.target.value)} displayEmpty><MenuItem value="" disabled>{label}</MenuItem>{options.map((option) => <MenuItem key={option} value={option}>{option}</MenuItem>)}</Select> : <TextField fullWidth label={label} type={type === 'textarea' ? 'text' : type} multiline={type === 'textarea'} minRows={type === 'textarea' ? 3 : undefined} disabled={!editing && !isPassword && !isSettings} value={form[key] || ''} onChange={(event) => change(key, event.target.value)} error={Boolean(errors[key])} helperText={errors[key]}/>}</Box>)}
+        {fields.map(([key, label, type = 'text', options = []]) => <Box key={key}>{type === 'select' ? <Select fullWidth disabled={!editing && !isPassword && !isSettings} value={form[key] || ''} onChange={(event) => change(key, event.target.value)} displayEmpty><MenuItem value="" disabled>{label}</MenuItem>{options.map((option) => <MenuItem key={option} value={option}>{option}</MenuItem>)}</Select> : type === 'password' ? <PasswordField fullWidth label={label} autoComplete={key === 'currentPassword' ? 'current-password' : 'new-password'} disabled={!editing && !isPassword && !isSettings} value={form[key] || ''} onChange={(event) => change(key, event.target.value)} error={Boolean(errors[key])} helperText={errors[key]}/> : <TextField fullWidth label={label} type={type === 'textarea' ? 'text' : type} multiline={type === 'textarea'} minRows={type === 'textarea' ? 3 : undefined} disabled={!editing && !isPassword && !isSettings} value={form[key] || ''} onChange={(event) => change(key, event.target.value)} error={Boolean(errors[key])} helperText={errors[key]}/>}</Box>)}
         {errors.form && <Alert severity="error" sx={{ gridColumn:'1 / -1' }}>{errors.form}</Alert>}
       </section>
       <Box className="sm-actions"><Button variant="contained" onClick={save}>{isPassword ? 'Change Password' : 'Save Changes'}</Button></Box>
@@ -541,6 +557,7 @@ const DeliveryRadiusPage = () => {
   }, [storeId]); // eslint-disable-line react-hooks/exhaustive-deps
   const activeRules = editing ? rules.map((rule) => rule.id === editing.id ? editing : rule).concat(editing.id ? [] : [editing]) : rules;
   const sortedRules = [...activeRules].sort((a, b) => Number(a.radiusKm || a.maxRadiusKm) - Number(b.radiusKm || b.maxRadiusKm));
+  const nextRadius = Math.max(0, ...rules.map((rule) => Number(rule.maxRadiusKm || rule.radiusKm || 0))) + (rules.length ? 5 : 3);
   const persistRule = async (rule, payload) => {
     const catalogStore = await ensureCatalogStore();
     if (!rule.id) return createStoreDeliveryZone(catalogStore.id, payload);
@@ -554,21 +571,41 @@ const DeliveryRadiusPage = () => {
   const saveRule = async () => {
     setMessage('');
     setErrors({});
-    const radius = Number(editing.radiusKm || editing.maxRadiusKm);
+    if (!Number.isFinite(Number(store?.latitude)) || !Number.isFinite(Number(store?.longitude))) {
+      setErrors({ form:'This store has no saved map pin. Ask an administrator to add the store location before configuring delivery radius.' });
+      return;
+    }
+    const radius = Number(editing.radiusKm ?? editing.maxRadiusKm);
     const duplicate = rules.some((rule) => rule.id !== editing.id && Number(rule.radiusKm || rule.maxRadiusKm) === radius);
     const next = {};
-    if (!(radius > 0)) next.radiusKm = 'Radius must be greater than 0.';
+    if (!Number.isFinite(radius) || !(radius > 0)) next.radiusKm = 'Radius must be greater than 0.';
     if (duplicate) next.radiusKm = `A ${radius} KM delivery radius already exists.`;
+    const charge = Number(editing.deliveryCharge);
+    if (!Number.isFinite(charge) || charge < 0) next.deliveryCharge = 'Enter a delivery charge of 0 or more.';
+    if (editing.freeDeliveryAbove !== '' && editing.freeDeliveryAbove != null && (!Number.isFinite(Number(editing.freeDeliveryAbove)) || Number(editing.freeDeliveryAbove) < 0)) next.freeDeliveryAbove = 'Enter a valid free delivery threshold.';
+    if (editing.minimumOrder !== '' && editing.minimumOrder != null && (!Number.isFinite(Number(editing.minimumOrder)) || Number(editing.minimumOrder) < 0)) next.minimumOrder = 'Enter a valid minimum order amount.';
+    const etaMin = Number(editing.estimatedDeliveryMin);
+    const etaMax = Number(editing.estimatedDeliveryMax);
+    if (!Number.isInteger(etaMin) || etaMin < 0) next.estimatedDeliveryMin = 'Enter a whole number of minutes.';
+    if (!Number.isInteger(etaMax) || etaMax < 0 || etaMax < etaMin) next.estimatedDeliveryMax = 'ETA maximum must be at least the minimum.';
+    (editing.methods || []).forEach((method, index) => {
+      if (!Number.isFinite(Number(method.deliveryCharge)) || Number(method.deliveryCharge) < 0) next[`method-${index}`] = `${method.deliveryType} charge must be 0 or more.`;
+    });
     setErrors(next);
     if (Object.keys(next).length) return;
-    const merged = [...rules.filter((rule) => rule.id !== editing.id), { ...editing, radiusKm:radius, maxRadiusKm:radius }].sort((a, b) => Number(a.radiusKm) - Number(b.radiusKm));
-    let previous = 0;
-    const normalized = merged.map((rule) => {
-      const max = Number(rule.radiusKm || rule.maxRadiusKm);
-      const zone = { ...rule, minRadiusKm:previous, maxRadiusKm:max };
-      previous = max;
-      return zone;
-    });
+    const current = rules.find((rule) => rule.id === editing.id);
+    const minRadius = current ? Number(current.minRadiusKm || 0) : Number(rules.reduce((max, rule) => Math.max(max, Number(rule.maxRadiusKm || rule.radiusKm || 0)), 0));
+    if (radius <= minRadius) {
+      setErrors({ radiusKm:`Radius must be greater than the existing ${minRadius} KM coverage.` });
+      return;
+    }
+    const nextZoneStart = current && rules.filter((rule) => rule.id !== current.id && Number(rule.minRadiusKm || 0) > minRadius).reduce((nearest, rule) => Math.min(nearest, Number(rule.minRadiusKm)), Infinity);
+    if (Number.isFinite(nextZoneStart) && radius >= nextZoneStart) {
+      setErrors({ radiusKm:`Radius must stay below the next zone boundary (${nextZoneStart} KM).` });
+      return;
+    }
+    const merged = [...rules.filter((rule) => rule.id !== editing.id), { ...editing, radiusKm:radius, minRadiusKm:minRadius, maxRadiusKm:radius }].sort((a, b) => Number(a.minRadiusKm) - Number(b.minRadiusKm));
+    const normalized = merged;
     try {
       for (const rule of normalized) {
         const payload = {
@@ -614,34 +651,44 @@ const DeliveryRadiusPage = () => {
   };
   const updateMethod = (deliveryType, patch) => setEditing((current) => ({ ...current, methods:(current.methods || emptyRule().methods).map((method) => method.deliveryType === deliveryType ? { ...method, ...patch } : method) }));
   return <StoreManagerShell active="delivery-radius" store={store}>
-    <Box className="sm-page-title"><Box><Typography variant="h4">Delivery Radius & Service Area</Typography><Typography>{store?.name || 'Assigned store'} {store?.location ? `- ${store.location}` : ''}</Typography></Box><Button variant="contained" onClick={() => setEditing(emptyRule(3))}>+ Add Delivery Radius</Button></Box>
+    <Box className="sm-radius-dashboard">
+    <Box className="sm-radius-heading"><Box className="sm-radius-heading-icon"><MyLocationOutlinedIcon/></Box><Box><Typography variant="h4">Delivery Radius &amp; Service Area</Typography><Typography>Manage your store's delivery location, radius, and service charges.</Typography></Box><Box className="sm-radius-heading-art"><LocationOnOutlinedIcon/></Box></Box>
     {error && <Alert severity="warning">{error}</Alert>}
     {message && <Alert severity="info">{message}</Alert>}
     {errors.form && <Alert severity="error">{errors.form}</Alert>}
-    {loading || !store ? <Typography>Loading delivery radius...</Typography> : <Box className="sm-radius-layout">
-      <StoreMap store={store} rules={rules} editingRule={editing} />
+    {loading || !store ? <Typography>Loading delivery radius...</Typography> : <>
+    <Box className="sm-radius-metrics">{[
+      {label:'Store Location',value:store.location || 'Assigned store',caption:store.name || 'Current store area',icon:<LocationOnOutlinedIcon/>,tone:'green'},
+      {label:'Delivery Radius',value:sortedRules.length ? `${Math.max(...sortedRules.map((rule)=>Number(rule.maxRadiusKm||rule.radiusKm||0)))} KM` : 'Not set',caption:'Current delivery range',icon:<MyLocationOutlinedIcon/>,tone:'blue'},
+      {label:'Service Area',value:sortedRules.length ? `${(Math.PI*Math.max(...sortedRules.map((rule)=>Number(rule.maxRadiusKm||rule.radiusKm||0)))**2).toFixed(2)} km²` : '0 km²',caption:'Estimated coverage area',icon:<LayersOutlinedIcon/>,tone:'purple'},
+      {label:'Active Rules',value:rules.filter((rule)=>rule.status==='Active').length,caption:'Total delivery radius rules',icon:<LocalShippingOutlinedIcon/>,tone:'amber'},
+    ].map((item)=><Box className={`sm-radius-metric ${item.tone}`} key={item.label}><Box>{item.icon}</Box><section><small>{item.label}</small><strong>{item.value}</strong><em>{item.caption}</em></section></Box>)}</Box>
+    <Box className="sm-radius-layout">
+      <Box className="sm-radius-map-panel"><Box className="sm-radius-section-title"><LocationOnOutlinedIcon/><Box><strong>Store Delivery Location</strong><small>Delivery radius is applied from your assigned store pin.</small></Box><Chip label={store.location || 'Assigned store'} size="small"/></Box><StoreMap store={store} rules={rules} editingRule={editing} /></Box>
       <aside className="sm-radius-panel">
-        <Typography variant="h6">Delivery Radius Rules</Typography>
+        <Box className="sm-radius-rules-title"><Box><StorefrontOutlinedIcon/><Box><strong>Delivery Radius Rules</strong><small>Configure delivery charges, free delivery limit, and estimated time.</small></Box></Box><Button variant="contained" onClick={() => { setErrors({}); setEditing(emptyRule(nextRadius)); }}>+ Add Rule</Button></Box>
         {sortedRules.map((rule, index) => <Box className={`sm-rule-card ${editing === rule ? 'editing' : ''}`} key={rule.id || `draft-${index}`}>
           <Box className="sm-rule-head"><Typography fontWeight={800}>{zoneLabel(rule)}</Typography><Chip label={rule.status || 'Active'} size="small"/></Box>
-          <Typography>{money(rule.deliveryCharge)} Standard Delivery</Typography>
+          <Typography><strong>{money(rule.deliveryCharge)}</strong> Base delivery charge</Typography>
+          <Typography color="text.secondary">Free delivery above: {rule.freeDeliveryAbove == null ? 'Not set' : money(rule.freeDeliveryAbove)} · Minimum order: {rule.minimumOrder == null ? 'Not set' : money(rule.minimumOrder)}</Typography>
           <Typography color="text.secondary">{etaLabel(rule)}</Typography>
-          <Box className="sm-method-tags">{(rule.methods || []).filter((method) => method.enabled).map((method) => <Chip key={method.deliveryType} label={method.deliveryType.replace(' Delivery', '')} size="small"/>)}</Box>
+          <Box className="sm-method-tags">{(rule.methods || []).filter((method) => method.enabled).map((method) => <Chip key={method.deliveryType} label={`${method.deliveryType.replace(' Delivery', '')}: ${money(method.deliveryCharge)}`} size="small"/>)}</Box>
           <Box><Button onClick={() => setEditing({ ...rule, methods:rule.methods || [] })}>Edit</Button><Button color="error" onClick={() => removeRule(rule)}>Delete</Button></Box>
         </Box>)}
         {editing && <Box className="sm-editor">
           <Typography variant="h6">{editing.id ? 'Edit Radius' : 'Add Radius'}</Typography>
-          <TextField label="Radius KM" type="number" value={editing.radiusKm || ''} onChange={(event) => setEditing({ ...editing, radiusKm:event.target.value, maxRadiusKm:event.target.value })} error={Boolean(errors.radiusKm)} helperText={errors.radiusKm || 'The map preview updates immediately.'}/>
-          <TextField label="Delivery Charge" type="number" value={editing.deliveryCharge || ''} onChange={(event) => setEditing({ ...editing, deliveryCharge:event.target.value })}/>
-          <TextField label="Free Delivery Above" type="number" value={editing.freeDeliveryAbove || ''} onChange={(event) => setEditing({ ...editing, freeDeliveryAbove:event.target.value })}/>
-          <TextField label="Minimum Order" type="number" value={editing.minimumOrder || ''} onChange={(event) => setEditing({ ...editing, minimumOrder:event.target.value })}/>
-          <Box className="sm-two"><TextField label="ETA Min" type="number" value={editing.estimatedDeliveryMin || ''} onChange={(event) => setEditing({ ...editing, estimatedDeliveryMin:event.target.value })}/><TextField label="ETA Max" type="number" value={editing.estimatedDeliveryMax || ''} onChange={(event) => setEditing({ ...editing, estimatedDeliveryMax:event.target.value })}/></Box>
+          <TextField label="Maximum Radius (km)" type="number" inputProps={{ min:0.1, step:0.1 }} value={editing.radiusKm ?? ''} onChange={(event) => setEditing({ ...editing, radiusKm:event.target.value, maxRadiusKm:event.target.value })} error={Boolean(errors.radiusKm)} helperText={errors.radiusKm || `${editing.id ? `Coverage starts at ${Number(editing.minRadiusKm || 0)} km.` : `Next zone starts at ${Number(rules.reduce((max, rule) => Math.max(max, Number(rule.maxRadiusKm || rule.radiusKm || 0)), 0))} km.`} The map preview updates immediately.`}/>
+          <TextField label="Delivery Charge (₹)" type="number" inputProps={{ min:0, step:0.01 }} value={editing.deliveryCharge ?? ''} onChange={(event) => setEditing({ ...editing, deliveryCharge:event.target.value })} error={Boolean(errors.deliveryCharge)} helperText={errors.deliveryCharge || 'Base charge for this radius zone.'}/>
+          <TextField label="Free Delivery Above (₹)" type="number" inputProps={{ min:0, step:0.01 }} value={editing.freeDeliveryAbove ?? ''} onChange={(event) => setEditing({ ...editing, freeDeliveryAbove:event.target.value })} error={Boolean(errors.freeDeliveryAbove)} helperText={errors.freeDeliveryAbove || 'Leave blank to disable free delivery.'}/>
+          <TextField label="Minimum Order (₹)" type="number" inputProps={{ min:0, step:0.01 }} value={editing.minimumOrder ?? ''} onChange={(event) => setEditing({ ...editing, minimumOrder:event.target.value })} error={Boolean(errors.minimumOrder)} helperText={errors.minimumOrder}/>
+          <Box className="sm-two"><TextField label="ETA Min (minutes)" type="number" inputProps={{ min:0, step:1 }} value={editing.estimatedDeliveryMin ?? ''} onChange={(event) => setEditing({ ...editing, estimatedDeliveryMin:event.target.value })} error={Boolean(errors.estimatedDeliveryMin)} helperText={errors.estimatedDeliveryMin}/><TextField label="ETA Max (minutes)" type="number" inputProps={{ min:0, step:1 }} value={editing.estimatedDeliveryMax ?? ''} onChange={(event) => setEditing({ ...editing, estimatedDeliveryMax:event.target.value })} error={Boolean(errors.estimatedDeliveryMax)} helperText={errors.estimatedDeliveryMax}/></Box>
           <Typography fontWeight={800}>Delivery Types</Typography>
-          {(editing.methods || emptyRule().methods).map((method) => <Box className="sm-method-editor" key={method.deliveryType}><Button variant={method.enabled ? 'contained' : 'outlined'} onClick={() => updateMethod(method.deliveryType, { enabled:!method.enabled })}>{method.deliveryType}</Button><TextField label="Charge" type="number" value={method.deliveryCharge ?? ''} onChange={(event) => updateMethod(method.deliveryType, { deliveryCharge:event.target.value })}/><TextField label="ETA" value={method.estimatedTime || ''} onChange={(event) => updateMethod(method.deliveryType, { estimatedTime:event.target.value })}/></Box>)}
+          {(editing.methods || emptyRule().methods).map((method, index) => <Box className="sm-method-editor" key={method.deliveryType}><Button variant={method.enabled ? 'contained' : 'outlined'} onClick={() => updateMethod(method.deliveryType, { enabled:!method.enabled })}>{method.deliveryType}</Button><TextField label="Charge (₹)" type="number" inputProps={{ min:0, step:0.01 }} value={method.deliveryCharge ?? ''} onChange={(event) => updateMethod(method.deliveryType, { deliveryCharge:event.target.value })} error={Boolean(errors[`method-${index}`])} helperText={errors[`method-${index}`]}/><TextField label="ETA" value={method.estimatedTime || ''} onChange={(event) => updateMethod(method.deliveryType, { estimatedTime:event.target.value })}/></Box>)}
           <Box className="sm-actions"><Button onClick={() => setEditing(null)}>Cancel</Button><Button variant="contained" onClick={saveRule}>Save Radius</Button></Box>
         </Box>}
       </aside>
-    </Box>}
+    </Box></>}
+    </Box>
   </StoreManagerShell>;
 };
 

@@ -22,12 +22,19 @@ const inventoryStatus = (value) => {
 export const adaptInventory = (inventory, context = {}) => {
   const stores = context.stores || [];
   const products = context.products || [];
-  const store = stores.find((item) => item.id === inventory?.storeId);
+  const store = stores.find((item) => String(item.id) === String(inventory?.storeId));
   const status = inventoryStatus(inventory?.status);
   const productId = inventory?.productId || null;
   const variantId = inventory?.variantId ?? null;
-  const product = products.find((item) => item.productId === productId || item.id === productId);
-  const variant = product?.variants?.find((item) => item.variantId === variantId || item.id === variantId);
+  const product = products.find((item) => String(item.productId ?? item.id) === String(productId));
+  const variant = product?.variants?.find((item) => String(item.variantId ?? item.id) === String(variantId));
+  const productImage = product?.images?.find((image) => image?.primaryImage || image?.isPrimary)?.url
+    || product?.images?.[0]?.url
+    || product?.image
+    || product?.imageUrl
+    || product?.thumbnailUrl
+    || product?.gallery?.[0]
+    || '';
   const storeId = inventory?.storeId || null;
   const availableQuantity = numberValue(inventory?.availableQuantity);
   const reservedQuantity = numberValue(inventory?.reservedQuantity);
@@ -46,6 +53,8 @@ export const adaptInventory = (inventory, context = {}) => {
     updatedAt: inventory?.updatedAt || null,
     version: inventory?.version,
     name: product?.name || product?.title || (productId ? 'Catalog product missing' : 'Inventory record'),
+    productImage,
+    category: product?.categoryName || product?.category?.name || product?.category || '',
     sku: variant?.sku || variant?.label || variant?.name || (product ? variantId || 'Product-level' : productId || variantId || 'Product-level'),
     store: store?.name || storeId || '',
     location: store?.location || '',

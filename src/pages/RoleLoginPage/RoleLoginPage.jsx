@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { AppContext } from '../../context/AppContext';
 import { orgAccessService, teamLandingPath } from '../../services/orgAccessService';
 import { STAFF_ROLES } from '../../config/accessControl';
+import PasswordField from '../../components/PasswordField.jsx';
 import logo from '../../assets/images/logo.png';
 import './RoleLoginPage.css';
 
@@ -42,7 +43,7 @@ const RoleLoginPage = () => {
         </Box>
 
         <TextField label="Username" type="text" value={email} onChange={(e) => setEmail(e.target.value)} />
-        <TextField label="Password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} />
+        <PasswordField label="Password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} />
 
         {error && <Alert severity="error">{error}</Alert>}
 

@@ -1,5 +1,5 @@
 import { useState, useContext, useEffect, useLayoutEffect, useRef } from 'react';
-import { Box, Typography, Button, Chip, Dialog, DialogActions, DialogContent, DialogTitle, IconButton, Rating } from '@mui/material';
+import { Box, Typography, Button, Dialog, DialogActions, DialogContent, DialogTitle, IconButton, Rating } from '@mui/material';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 import ScaleOutlinedIcon from '@mui/icons-material/ScaleOutlined';
@@ -8,12 +8,13 @@ import VisibilityOutlinedIcon from '@mui/icons-material/VisibilityOutlined';
 import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import { AppContext } from '../../context/AppContext';
 import ProductCard from '../../components/ProductCard/ProductCard';
-import { getProduct, getProductVariants, getProductImages } from '../../services/catalogApi';
+import { getProduct, getProductVariants, getProductImages, getPublicStoreProducts } from '../../services/catalogApi';
 import { adaptProduct, adaptImage, adaptVariant, variantChoiceLabel } from '../../services/catalogAdapter';
 import { getPublicInventoryAvailability } from '../../services/inventoryApi';
 import { loadProductStock } from '../../utils/productStock.js';
+import { normalizeWeightLabel } from '../../utils/productVariantData.js';
 import { getProductReviews } from '../../services/reviewApi';
-import { resolveProductStore } from '../../services/productStoreResolver';
+import { resolveProductStore, resolveProductStoreForLocation } from '../../services/productStoreResolver';
 import SafeProductImage from '../SafeProductImage/SafeProductImage';
 import './ProductInfo.css';
 
@@ -26,11 +27,12 @@ const ProductInfo = () => {
   const { productId } = useParams();
   const location = useLocation();
   const scrollRef = useRef(null);
-  const { selectedProduct, addToCart, updateQuantity, openCart, cartCount, cartItems, isLoggedIn, formatCurrency, catalogProducts, sameCatalogItem, cartLoading, cartError } = useContext(AppContext);
+  const { selectedProduct, addToCart, updateQuantity, openCart, cartCount, cartItems, isLoggedIn, formatCurrency, catalogProducts, catalogStores, selectedLocation, sameCatalogItem, cartLoading, cartError } = useContext(AppContext);
   const [imageIndex, setImageIndex] = useState(0);
   const [imageFallbackSrc, setImageFallbackSrc] = useState('');
   const [activeLink, setActiveLink] = useState(null);
   const [productReviews, setProductReviews] = useState([]);
+  const [availableStores, setAvailableStores] = useState([]);
   const targetId = productId || selectedProduct?.productId || selectedProduct?.id || selectedProduct?.sku;
   useEffect(() => {
     let active = true;
@@ -98,7 +100,21 @@ const ProductInfo = () => {
 
   const navigationProduct = location.state?.product || selectedProduct;
   const storeSource = navigationProduct?.productId === targetId || navigationProduct?.id === targetId ? navigationProduct : {};
-  const store = resolveProductStore({ ...catalogProduct, ...(storeSource.storeId ? { storeId: storeSource.storeId, storeName: storeSource.storeName, store: storeSource.store } : {}) }, catalogProducts);
+  const requestedStore = storeSource.storeId ? resolveProductStore(storeSource, []) : null;
+  const store = resolveProductStoreForLocation({ product: catalogProduct || {}, requestedStore, availableStores, stores: catalogStores, location: selectedLocation });
+  useEffect(() => {
+    if (!targetId) return undefined;
+    let ignore = false;
+    getPublicStoreProducts('', { productId: targetId }).then((response) => {
+      if (ignore) return;
+      const stores = responseItems(response)
+        .filter((item) => String(item.productId || item.product?.id || '') === String(targetId))
+        .map((item) => resolveProductStore(item, []))
+        .filter((item) => item?.storeId || item?.storeName);
+      setAvailableStores([...new Map(stores.map((item) => [item.storeId || item.storeName, item])).values()]);
+    }).catch(() => { if (!ignore) setAvailableStores([]); });
+    return () => { ignore = true; };
+  }, [targetId]);
   const actualVariants = currentVariantResult && !currentVariantResult.error ? currentVariantResult.variants : catalogProduct?.catalogVariants || [];
   const apiImages = currentImageResult && !currentImageResult.error ? currentImageResult.images : null;
   const imageList = apiImages?.length ? apiImages.map((image) => image.url) : catalogProduct?.gallery || [];
@@ -106,6 +122,9 @@ const ProductInfo = () => {
   const product = catalogProduct ? {
     ...catalogProduct,
     ...store,
+    storeId: store?.storeId || '',
+    store: store?.store || '',
+    storeName: store?.storeName || '',
     variants: actualVariants,
     gallery: imageList,
     image: primaryApiImage || (apiImages?.length ? imageList[0] : catalogProduct.image || imageList[0]),
@@ -122,7 +141,7 @@ const ProductInfo = () => {
   const productPriceKnown = selectedVariant ? selectedVariant.priceKnown !== false : product.priceKnown !== false;
   const variantDataUnknown = actualVariants.length === 0 && !catalogProduct?.catalogVariantsKnown && (!currentVariantResult || currentVariantResult.error);
   const variantsUnavailable = variantDataUnknown || (actualVariants.length > 0 && (!variantOptions.length || variantOptions.every((variant) => !variant.variantId && !variant.id)));
-  const selectedWeight = selectedVariant?.label || selectedVariant?.weight || product.weight || '';
+  const selectedWeight = normalizeWeightLabel(selectedVariant?.label || selectedVariant?.weight || product.weight || '');
   const [stockResult, setStockResult] = useState(null);
   const [stockAttempt, setStockAttempt] = useState(0);
   const stockVariantId = selectedVariant?.variantId ?? selectedVariant?.id ?? null;
@@ -137,10 +156,14 @@ const ProductInfo = () => {
   const stock = stockResult?.scope === stockScope ? stockResult : null;
   const checkingStock = Boolean(product.storeId && catalogProduct && !stock);
 
-  const bestSellers = catalogProducts.filter((item) => item.productId !== targetId
+  const productIdentity = (item) => String(item.productId || item.id || item.sku || '').trim().toLowerCase();
+  const currentProductIdentity = productIdentity({ ...product, productId: targetId });
+  const bestSellers = [...new Map(catalogProducts.filter((item) => productIdentity(item) !== currentProductIdentity
     && (item.bestSeller === 'Yes' || item.bestSeller === true)
-    && item.category === product.category).slice(0, 3);
+    && item.category === product.category)
+    .map((item) => [productIdentity(item), item])).values()].slice(0, 3);
   const productImages = [product.image, ...(product.gallery || [])].filter((image, index, values) => image && values.indexOf(image) === index);
+  const otherAvailableStoreNames = [...new Set(availableStores.map((item) => item.storeName || item.store || item.storeId).filter((name) => name && name !== product.storeName))];
   const selectedImageIndex = Math.min(imageIndex, Math.max(0, productImages.length - 1));
   const externalLinks = [
     { label: 'Website', url: product.websiteUrl },
@@ -150,8 +173,6 @@ const ProductInfo = () => {
     { label: 'Telegram', url: product.telegramUrl },
   ].map((link) => ({ ...link,url:validWebUrl(link.url) })).filter((link) => link.url);
   const productVideos = [product.videoUrl, ...String(product.videoUrls || '').split('\n')].map(validWebUrl).filter((url,index,items) => url && items.indexOf(url) === index);
-  const specifications = String(product.specifications || '').split('\n').map((line) => line.trim()).filter(Boolean);
-  const tags = (Array.isArray(product.tags) ? product.tags : String(product.tags || '').split(',')).map((tag) => String(tag).trim()).filter(Boolean);
   const approvedRatings = (Array.isArray(productReviews) ? productReviews : Array.isArray(product.reviews) ? product.reviews : []).filter((review) => String(review.status || '').toUpperCase() === 'APPROVED' && review.active !== false);
   const averageRating = approvedRatings.length
     ? approvedRatings.reduce((sum,review) => sum + Number(review.rating || 0),0) / approvedRatings.length
@@ -162,7 +183,8 @@ const ProductInfo = () => {
   const cartItem = cartItems.find((item) => sameCatalogItem(item, { productId: product.productId, variantId: selectedVariant?.variantId || selectedVariant?.id, storeId: product.storeId }));
   const productQuantity = cartItem ? cartItem.quantity : 0;
   const stockUnverified = Boolean(product.storeId && ['missing', 'error'].includes(stock?.state));
-  const isOutOfStock = stock?.state === 'out' || stockUnverified || product.available === false || product.active === false || selectedVariant?.active === false || variantsUnavailable;
+  const noEligibleStore = Boolean(catalogProduct && !product.storeId);
+  const isOutOfStock = noEligibleStore || stock?.state === 'out' || stockUnverified || product.available === false || product.active === false || selectedVariant?.active === false || variantsUnavailable;
 
   const handleViewCart = () => {
     if (isLoggedIn) {
@@ -203,9 +225,9 @@ const ProductInfo = () => {
         {productError && <Typography role="alert" color="error">Product details could not be loaded: {productError}</Typography>}
         {/* Main Product Image Banner */}
         <Box className="product-banner-wrap">
-          {productImages.length > 0 && <SafeProductImage src={productImages[selectedImageIndex]} alt={`${product.title} view ${selectedImageIndex + 1}`} className="product-main-img" onFallback={setImageFallbackSrc} />}
-          {!productImages.length && <Box className="product-main-img product-main-img-empty">No image specified</Box>}
-          <Typography className="product-image-status" aria-live="polite">{imageFallbackSrc === productImages[selectedImageIndex] ? 'This image could not be loaded; showing a fallback.' : imagesLoading ? 'Loading product images...' : currentImageResult?.error ? 'Product images could not be loaded; showing the available fallback.' : !imageList.length ? 'No product images are available.' : ''}</Typography>
+          <SafeProductImage src={productImages.length > 0 ? productImages[selectedImageIndex] : ''} alt={`${product.title} product`} className="product-main-img" onFallback={setImageFallbackSrc} />
+          {stock?.state === 'out' && <Box className="product-stock-image-badge" role="status">Out of stock</Box>}
+          <Typography className="product-image-status" aria-live="polite">{imageFallbackSrc === productImages[selectedImageIndex] ? 'This image could not be loaded; showing a fallback.' : imagesLoading ? 'Loading product images...' : currentImageResult?.error ? 'Product images could not be loaded; showing the available fallback.' : !imageList.length ? 'Product image unavailable; showing a placeholder.' : ''}</Typography>
           <Box className="carousel-dots">
             {productImages.map((_, index) => <button type="button" aria-label={`View image ${index + 1}`} key={index} className={`dot ${selectedImageIndex === index ? 'active' : ''}`} onClick={() => setImageIndex(index)} />)}
           </Box>
@@ -240,26 +262,14 @@ const ProductInfo = () => {
           <Typography className="product-description-text">
             {product.description || 'Not specified'}
           </Typography>
-          <Box className={`availability-status ${isOutOfStock ? 'out' : ''}`}><Typography>{productLoading || checkingStock ? 'Checking availability...' : stock?.state === 'available' ? 'In stock' : stock?.state === 'missing' ? 'Currently unavailable' : stock?.state === 'error' ? 'Availability could not be confirmed. Please try again.' : stock?.state === 'out' || product.active === false || product.available === false || selectedVariant?.active === false ? 'Unavailable' : variantsUnavailable ? 'Variant options unavailable' : 'Stock availability could not be checked'}</Typography>{stock?.state === 'error' && <Button size="small" onClick={() => setStockAttempt((attempt) => attempt + 1)}>Check again</Button>}</Box>
+          <Box className={`availability-status ${isOutOfStock ? 'out' : ''}`}><Typography>{productLoading || checkingStock ? 'Checking availability...' : noEligibleStore ? 'No store delivers this product to your selected location.' : stock?.state === 'available' && stock.lowStock ? 'Only a few available' : stock?.state === 'available' ? 'In stock' : stock?.state === 'missing' ? 'Currently unavailable' : stock?.state === 'error' ? 'Availability could not be confirmed. Please try again.' : stock?.state === 'out' || product.active === false || product.available === false || selectedVariant?.active === false ? 'Unavailable' : variantsUnavailable ? 'Variant options unavailable' : 'Stock availability could not be checked'}</Typography>{stock?.state === 'error' && <Button size="small" onClick={() => setStockAttempt((attempt) => attempt + 1)}>Check again</Button>}</Box>
+          {product.storeName && <Box className="info-block"><Typography className="info-block-heading">Selected store</Typography><Typography>{product.storeName}{product.storeId === 'global-store' ? ' · India-wide delivery, usually 7–10 days' : ''}</Typography></Box>}
+          {otherAvailableStoreNames.length > 0 && <Box className="info-block"><Typography className="info-block-heading">Also available at</Typography><Typography>{otherAvailableStoreNames.join(', ')}</Typography></Box>}
 
-          <Box className="info-block"><Typography className="info-block-heading">Ingredients</Typography><Typography>{product.ingredients || 'Not specified'}</Typography></Box>
-          <Box className="info-block"><Typography className="info-block-heading">Specifications</Typography>{specifications.length ? <Box className="specification-list">{specifications.map((specification) => { const [label,...value]=specification.split(':');return <Box key={specification}><Typography>{label}</Typography><Typography>{value.join(':').trim() || '-'}</Typography></Box>; })}</Box> : <Typography>Not specified</Typography>}</Box>
-          <Box className="info-block"><Typography className="info-block-heading">Tags</Typography>{tags.length ? <Box className="tag-list">{tags.map((tag) => <Chip key={tag} label={tag} size="small" />)}</Box> : <Typography>Not specified</Typography>}</Box>
+          <Box className="info-block"><Typography className="info-block-heading">Nutrition</Typography><Typography>{product.ingredients || 'Not specified'}</Typography></Box>
           {(productVideos.length > 0 || externalLinks.length > 0) && <Box className="info-block"><Typography className="info-block-heading">Product Media & Links</Typography><Box className="product-video-grid">{productVideos.map((url) => url.includes('youtu') ? <iframe key={url} title={`${product.title} video`} src={youtubeEmbedUrl(url)} allow="accelerometer; autoplay; encrypted-media; picture-in-picture" allowFullScreen /> : <video key={url} controls src={url} />)}</Box><Box className="media-link-list">{externalLinks.map((link) => <Box key={link.label} className="media-link-row"><Typography>{link.label}</Typography><Box><Button size="small" startIcon={<VisibilityOutlinedIcon />} onClick={() => setActiveLink(link)}>Open here</Button><Button size="small" startIcon={<LaunchOutlinedIcon />} onClick={() => window.open(link.url,'_blank','noopener,noreferrer')}>External</Button></Box></Box>)}</Box></Box>}
           <Button variant="outlined" onClick={() => navigate('/reviews')} sx={{ justifyContent:'flex-start',gap:1,textTransform:'none' }}><Rating readOnly size="small" precision={0.1} value={averageRating} /> {averageRating ? `${averageRating.toFixed(1)} · ${Number(product.reviewCount ?? approvedRatings.length)} reviews` : 'No approved reviews yet'}</Button>
           {approvedRatings.length > 0 && <Box className="info-block" aria-label="Approved customer reviews"><Typography className="info-block-heading">Customer reviews</Typography>{approvedRatings.map((review) => <Box key={review.id} sx={{ py:1.5,borderBottom:'1px solid #e2e8f0',display:'grid',gap:0.75 }}><Rating value={Number(review.rating)||0} readOnly size="small" /><Typography sx={{ whiteSpace:'pre-wrap' }}>{review.comment || 'Customer rated this product.'}</Typography>{!!review.photoUrls?.length && <Box sx={{ display:'flex',gap:1,flexWrap:'wrap' }}>{review.photoUrls.map((photo,index)=><Box component="img" key={`${review.id}:${index}`} src={photo} alt={`Customer review photo ${index+1}`} sx={{ width:70,height:70,objectFit:'cover',borderRadius:1 }} />)}</Box>}{review.adminReply && <Box sx={{ pl:1.5,borderLeft:'3px solid #087f5b' }}><Typography variant="caption" fontWeight={700}>Response</Typography><Typography>{review.adminReply}</Typography></Box>}</Box>)}</Box>}
-
-          {/* Highlights */}
-          <Box className="info-block">
-            <Typography className="info-block-heading">Highlights:</Typography>
-            <ul className="highlights-list">
-              {(
-                product.highlights?.length ? product.highlights : ['Not specified']
-              ).map((h, i) => (
-                <li key={i}>{h}</li>
-              ))}
-            </ul>
-          </Box>
 
           {/* About the Source */}
           <Box className="info-block">

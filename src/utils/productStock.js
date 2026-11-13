@@ -7,7 +7,7 @@ export const loadProductStock = async (lookup, identity) => {
     if (!matches || typeof value?.available !== 'boolean') {
       return { state: 'error' };
     }
-    return { state: value.available ? 'available' : 'out' };
+    return { state: value.available ? 'available' : 'out', lowStock: value.available && value.lowStock === true };
   } catch (error) {
     return { state: Number(error.status) === 404 ? 'missing' : 'error' };
   }

@@ -94,6 +94,11 @@ export const GLOBAL_STORE_LISTING = Object.freeze({
   deliveryLabel: 'India-wide delivery', location: 'India', city: 'India', address: 'Nationwide delivery for global products',
 });
 
+export const withGlobalStoreFallback = (stores = []) => {
+  const rows = Array.isArray(stores) ? stores.filter((store) => store && typeof store === 'object') : [];
+  return rows.some(isGlobalStore) ? rows : [...rows, GLOBAL_STORE_LISTING];
+};
+
 export const isProductEligibleForStore = (product = {}, store = {}) =>
   !isGlobalStore(store) || isGlobalProduct(product);
 
@@ -117,9 +122,9 @@ export const storeDeliversTo = (store, location) => Boolean(store && location &&
 export const deliveryProducts = (products, mappings, stores, location) => {
   const eligible = new Map(stores.filter((store) => storeDeliversTo(store, location) || isGlobalStore(store)).map((store) => [String(store.id), store]));
   const masters = new Map(products.map((product) => [String(product.productId ?? product.id), product]));
-  const rows = mappings.length ? mappings.filter((item) => item.available !== false && item.product && String(item.status).toLowerCase() !== 'inactive')
-    .map((item) => ({ ...(masters.get(String(item.productId)) || item.product), storeId: item.storeId })) : products;
-  const nearbyRows = rows.filter((item) => item.active !== false && String(item.status).toLowerCase() !== 'inactive' && item.available !== false && eligible.has(String(item.storeId)) && isProductEligibleForStore(item, eligible.get(String(item.storeId))))
+  const rows = mappings.length ? mappings.filter((item) => item.product && String(item.status).toLowerCase() !== 'inactive')
+    .map((item) => ({ ...(masters.get(String(item.productId)) || item.product), available:item.available !== false, storeId: item.storeId })) : products;
+  const nearbyRows = rows.filter((item) => item.active !== false && String(item.status).toLowerCase() !== 'inactive' && eligible.has(String(item.storeId)) && isProductEligibleForStore(item, eligible.get(String(item.storeId))))
     .map((item) => {
       const store = eligible.get(String(item.storeId));
       return { ...item, store: store.name, storeName: store.name, fulfillmentType: isGlobalStore(store) ? 'global' : 'nearby' };

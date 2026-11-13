@@ -7,10 +7,10 @@ export const useOrderableStores = (stores = [], location = null, hasGlobalProduc
 
   useEffect(() => {
     let cancelled = false;
-    setOrderableStores([]);
     const globalStores = stores.filter(isGlobalStore);
     if (hasGlobalProducts && !globalStores.length) globalStores.push(GLOBAL_STORE_LISTING);
     const localStores = stores.filter((store) => storeDeliversTo(store, location));
+    setOrderableStores(globalStores);
     if (!Number.isFinite(Number(location?.latitude)) || !Number.isFinite(Number(location?.longitude))) {
       setOrderableStores(globalStores);
       return () => { cancelled = true; };

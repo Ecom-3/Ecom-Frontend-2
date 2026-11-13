@@ -40,6 +40,25 @@
   transition: transform 0.3s ease;
 }
 
+.product-stock-image-badge {
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  bottom: 8px;
+  padding: 5px 8px;
+  border-radius: 6px;
+  background: rgba(153, 27, 27, 0.94);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  text-align: center;
+  pointer-events: none;
+}
+
+.product-stock-image-badge.low {
+  background: rgba(180, 83, 9, 0.94);
+}
+
 .product-info {
   padding: 8px 10px;
   display: flex;

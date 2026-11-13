@@ -1,11 +1,21 @@
 import { useContext, useEffect, useMemo, useState } from 'react';
 import { Alert, Box, Button, Chip, Dialog, DialogActions, DialogContent, DialogTitle, FormControlLabel, MenuItem, Select, Switch, TextField, Typography } from '@mui/material';
-import { Bar, BarChart, CartesianGrid, Legend, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
+import { CartesianGrid, Cell, Legend, Line, LineChart, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import NavigationOutlinedIcon from '@mui/icons-material/NavigationOutlined';
 import MyLocationOutlinedIcon from '@mui/icons-material/MyLocationOutlined';
 import DashboardOutlinedIcon from '@mui/icons-material/DashboardOutlined';
 import LocalShippingOutlinedIcon from '@mui/icons-material/LocalShippingOutlined';
 import HistoryOutlinedIcon from '@mui/icons-material/HistoryOutlined';
+import PersonOutlineOutlinedIcon from '@mui/icons-material/PersonOutlineOutlined';
+import CheckCircleOutlineOutlinedIcon from '@mui/icons-material/CheckCircleOutlineOutlined';
+import DirectionsBikeOutlinedIcon from '@mui/icons-material/DirectionsBikeOutlined';
+import Inventory2OutlinedIcon from '@mui/icons-material/Inventory2Outlined';
+import TrackChangesOutlinedIcon from '@mui/icons-material/TrackChangesOutlined';
+import AccountBalanceWalletOutlinedIcon from '@mui/icons-material/AccountBalanceWalletOutlined';
+import AccessTimeOutlinedIcon from '@mui/icons-material/AccessTimeOutlined';
+import NotificationsNoneOutlinedIcon from '@mui/icons-material/NotificationsNoneOutlined';
+import NearMeOutlinedIcon from '@mui/icons-material/NearMeOutlined';
+import CalendarMonthOutlinedIcon from '@mui/icons-material/CalendarMonthOutlined';
 import { useNavigate } from 'react-router-dom';
 import { AppContext } from '../../context/AppContext';
 import { getMyDeliveryProfile, getMyDeliveries, updateMyDeliveryProfile, setMyAvailability, saveMyDeliveryLocation, deliveryAction, requestDeliveryOtp } from '../../services/deliveryPartnerApi';
@@ -13,6 +23,7 @@ import { orgAccessService } from '../../services/orgAccessService';
 import { orderedTrackingEvents, passwordChangeErrors } from './deliveryWorkspacePolicy.js';
 import { readBrowserPosition } from '../DeliveryNavigationPage/deliveryNavigation.js';
 import { deliveryPartnerLocation } from '../../services/deliveryPartnerLocation.js';
+import PasswordField from '../../components/PasswordField.jsx';
 import logo from '../../assets/images/logo.png';
 import './DeliveryWorkspace.css';
 
@@ -180,7 +191,12 @@ const DeliveryWorkspace = ({ section = 'dashboard' }) => {
   const retryOrders = () => { setOrdersError(''); setLoading(true); setReloadKey((value) => value + 1); };
   const act = async (order, action, extra = {}) => {
     setBusy(true);
-    try { await deliveryAction(order.id, action, extra); await refresh(); setMessage('Delivery updated.'); }
+    try {
+      await deliveryAction(order.id, action, extra);
+      setMessage(action === 'PICKUP' ? 'Order marked as picked up.' : 'Delivery updated.');
+      try { await refresh(); }
+      catch (refreshError) { setOrdersError(refreshError.message || 'Delivery updated, but the list could not refresh.'); }
+    }
     catch (error) { setMessage(error.message); throw error; }
     finally { setBusy(false); }
   };
@@ -321,7 +337,7 @@ const DeliveryWorkspace = ({ section = 'dashboard' }) => {
   const sectionTitle = { dashboard: 'Dashboard', orders: 'Assigned Deliveries', history: 'Delivery History' }[section] || 'Dashboard';
 
   const periodSelect = <Select size="small" value={days} onChange={(event) => setDays(Number(event.target.value))}>
-    <MenuItem value={15}>15 days</MenuItem><MenuItem value={30}>30 days</MenuItem><MenuItem value={70}>10 weeks</MenuItem><MenuItem value={365}>1 year</MenuItem>
+    <MenuItem value={15}>Last 15 Days</MenuItem><MenuItem value={30}>Last 30 Days</MenuItem><MenuItem value={70}>Last 10 Weeks</MenuItem><MenuItem value={365}>Last Year</MenuItem>
   </Select>;
 
   return <Box className="dw-shell">
@@ -331,7 +347,7 @@ const DeliveryWorkspace = ({ section = 'dashboard' }) => {
         {NAV_ITEMS.map(([id, label, Icon, path]) => <Button key={id} className={section === id ? 'active' : ''} startIcon={<Icon />} onClick={() => navigate(path)}><span>{label}</span></Button>)}
       </nav>
       <Box className="dw-sidebar-footer">
-        <FormControlLabel control={<Switch disabled={busy || !latestPartner} checked={available} onChange={changeAvailability} color="default" />} label={available ? 'Active' : 'Inactive'} />
+        <FormControlLabel control={<Switch disabled={busy || !latestPartner} checked={available} onChange={changeAvailability} color="default" />} label={available ? 'Online' : 'Offline'} />
         <Box className="dw-location-summary" aria-live="polite">
           <Typography variant="caption" fontWeight={800}>Your delivery area</Typography>
           <Typography variant="caption">Assigned store: {latestPartner?.store || 'Not assigned'}</Typography>
@@ -351,47 +367,27 @@ const DeliveryWorkspace = ({ section = 'dashboard' }) => {
     </aside>
 
     <main className="dw-main">
-      <header className="dw-topbar"><Typography variant="h5" fontWeight={800}>{sectionTitle}</Typography></header>
+      <header className="dw-topbar"><Box><Typography variant="h5" fontWeight={800}>{sectionTitle}</Typography>{section === 'dashboard' && <Typography className="dw-welcome">Welcome back, {latestPartner?.name || user?.name || 'Delivery Partner'} 👋</Typography>}</Box><Box className="dw-topbar-actions">{section === 'dashboard' && <Chip label={available ? 'Online' : 'Offline'} icon={<span className={available ? 'dw-online-dot' : 'dw-offline-dot'}/>} /> }<Button aria-label="Notifications" onClick={()=>setMessage('No new notifications.')}><NotificationsNoneOutlinedIcon/></Button></Box></header>
       {message && <Alert severity="info" sx={{ mb: 2 }} onClose={() => setMessage('')}>{message}</Alert>}
       {ordersError && <Alert severity="error" sx={{ mb: 2 }} action={<Button color="inherit" size="small" disabled={loading} onClick={retryOrders}>Retry</Button>}>{ordersError}</Alert>}
       {loading && !ordersError && <Typography sx={{ mb: 2 }} color="text.secondary">Loading deliveries...</Typography>}
 
-      {section === 'dashboard' && <Box className="delivery-history">
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 1 }}><Box><Typography variant="h6">Delivery Performance</Typography><Typography variant="body2" color="text.secondary">Charts and delivery outcomes for the selected period.</Typography></Box><Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>{periodSelect}<Button variant="outlined" onClick={() => navigate('/delivery/history')}>View historical delivery details</Button></Box></Box>
-        <Box sx={{ display: 'grid', gridTemplateColumns: { xs: 'repeat(2,1fr)', sm: 'repeat(3,1fr)', xl: 'repeat(6,1fr)' }, gap: 2, my: 2 }}>
-          <Box><Typography variant="h5">{allOrders.length}</Typography><span>Assigned</span></Box>
-          <Box><Typography variant="h5">{orders.length}</Typography><span>Active</span></Box>
-          <Box><Typography variant="h5">{today}</Typography><span>Delivered today</span></Box>
-          <Box><Typography variant="h5">{delivered.length}</Typography><span>Delivered</span></Box>
-          <Box><Typography variant="h5">{successRate}%</Typography><span>Success rate</span></Box>
-          <Box><Typography variant="h5">{money(delivered.reduce((sum, order) => sum + orderTotalOf(order), 0))}</Typography><span>Value handled</span></Box>
+      {section === 'dashboard' && <Box className="dw-dashboard">
+        <Box className="dw-performance-head"><Box className="dw-rider-art"><DirectionsBikeOutlinedIcon/></Box><Box><Typography variant="h6">Delivery Performance</Typography><Typography>Track your deliveries, success rate, and earnings for the selected period.</Typography></Box><Box className="dw-performance-controls">{periodSelect}<Button variant="outlined" onClick={() => navigate('/delivery/history')}>View Historical Delivery Details</Button></Box></Box>
+        <Box className="dw-metrics">{[
+          ['Assigned',allOrders.length,<Inventory2OutlinedIcon/>, 'green'], ['Active',orders.length,<PersonOutlineOutlinedIcon/>, 'blue'], ['Delivered Today',today,<DirectionsBikeOutlinedIcon/>, 'green'], ['Total Delivered',delivered.length,<CheckCircleOutlineOutlinedIcon/>, 'purple'], ['Success Rate',`${successRate}%`,<TrackChangesOutlinedIcon/>, 'amber'], ['Value Handled',money(delivered.reduce((sum, order) => sum + orderTotalOf(order), 0)),<AccountBalanceWalletOutlinedIcon/>, 'green'],
+        ].map(([label,value,icon,tone])=><Box className={`dw-metric ${tone}`} key={label}><Box>{icon}</Box><section><strong>{value}</strong><small>{label}</small></section></Box>)}</Box>
+        <Box className="dw-dashboard-charts">
+          <Box className="dw-dashboard-card"><Typography className="dw-card-title">Deliveries Over Time</Typography><Box className="dw-line-chart"><ResponsiveContainer width="100%" height="100%"><LineChart data={trendData} margin={{top:8,right:8,left:-20,bottom:0}}><CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e7eeeb"/><XAxis dataKey="label" tick={{fontSize:9}} interval="preserveStartEnd"/><YAxis allowDecimals={false} tick={{fontSize:9}}/><Tooltip/><Legend wrapperStyle={{fontSize:9}}/><Line type="monotone" dataKey="Delivered" stroke="#078b4b" strokeWidth={2} dot={{r:2,fill:'#fff',strokeWidth:2}}/><Line type="monotone" dataKey="Failed" name="Failed / Cancelled" stroke="#d92f24" strokeWidth={1.5} dot={{r:2}}/></LineChart></ResponsiveContainer></Box>{!period.length&&<span className="dw-chart-empty">No completed deliveries in this period</span>}</Box>
+          <Box className="dw-dashboard-card"><Typography className="dw-card-title">Success vs Failed / Cancelled</Typography><Box className="dw-success-chart"><Box className="dw-success-donut"><ResponsiveContainer width="100%" height="100%"><PieChart><Pie data={outcomeData.length?outcomeData:[{name:'No deliveries',value:1,fill:'#e7eeea'}]} dataKey="value" nameKey="name" innerRadius="67%" outerRadius="88%" stroke="none">{(outcomeData.length?outcomeData:[{name:'No deliveries',value:1,fill:'#e7eeea'}]).map((item,index)=><Cell key={item.name} fill={item.fill||OUTCOME_COLORS[item.name]||'#e7eeea'}/>)}</Pie><Tooltip/></PieChart></ResponsiveContainer><Box><strong>{successRate}%</strong><small>Success Rate</small></Box></Box><Box className="dw-success-legend"><span><i className="delivered"/>Delivered <b>{delivered.length}</b></span><span><i className="failed"/>Failed / Cancelled <b>{period.length-delivered.length}</b></span><hr/><strong>Total Deliveries <b>{period.length}</b></strong></Box></Box></Box>
         </Box>
-        {!period.length ? <Box><Typography color="text.secondary">No completed deliveries in this period.</Typography><Button sx={{ mt: 1 }} onClick={() => navigate('/delivery/history')}>Open delivery history</Button></Box> : <Box className="delivery-charts">
-          <Box className="delivery-chart">
-            <Typography variant="subtitle2">Deliveries over time</Typography>
-            <ResponsiveContainer width="100%" height={240}>
-              <BarChart data={trendData} margin={{ top: 8, right: 8, left: -20, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                <XAxis dataKey="label" tick={{ fontSize: 11 }} interval="preserveStartEnd" />
-                <YAxis allowDecimals={false} tick={{ fontSize: 11 }} />
-                <Tooltip />
-                <Legend />
-                <Bar dataKey="Delivered" stackId="a" fill={OUTCOME_COLORS.Delivered} radius={[0, 0, 0, 0]} />
-                <Bar dataKey="Failed" name="Failed / cancelled" stackId="a" fill={OUTCOME_COLORS.Failed} radius={[3, 3, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          </Box>
-          <Box className="delivery-chart">
-            <Typography variant="subtitle2">Success vs failed / cancelled</Typography>
-            <ResponsiveContainer width="100%" height={240}>
-              <PieChart>
-                <Pie data={outcomeData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={80} label={(slice) => `${slice.name}: ${slice.value}`} />
-                <Tooltip />
-                <Legend />
-              </PieChart>
-            </ResponsiveContainer>
-          </Box>
-        </Box>}
+        <Box className="dw-today-summary"><Typography className="dw-card-title"><CalendarMonthOutlinedIcon/>Today's Summary</Typography><Box><DirectionsBikeOutlinedIcon/><strong>{today}</strong><small>Delivered</small></Box><Box><span className="dw-summary-x">×</span><strong>{period.filter((order)=>['Failed','Cancelled'].includes(outcomeOf(order))&&new Date(historyDate(order)).toDateString()===new Date(reportNow).toDateString()).length}</strong><small>Failed / Cancelled</small></Box><Box><AccountBalanceWalletOutlinedIcon/><strong>{money(delivered.filter((order)=>new Date(historyDate(order)).toDateString()===new Date(reportNow).toDateString()).reduce((sum,order)=>sum+orderTotalOf(order),0))}</strong><small>Earnings (Value Handled)</small></Box><Box><AccessTimeOutlinedIcon/><strong>{successRate}%</strong><small>Success Rate</small></Box></Box>
+        <Box className="dw-quick-actions"><Typography className="dw-card-title">Quick Actions</Typography><Box>{[
+          ['View Map','See your delivery area',<LocationOnOutlinedIcon/>,()=>sharedLocation?window.open(sharedLocation.mapUrl,'_blank','noopener,noreferrer'):setMessage('Share your GPS location to open your delivery area.'),'green'],
+          ['Share GPS','Update your live location',<NearMeOutlinedIcon/>,locate,'blue'],
+          ['Delivery History','View past deliveries',<HistoryOutlinedIcon/>,()=>navigate('/delivery/history'),'amber'],
+          ['My Profile','Update your details',<PersonOutlineOutlinedIcon/>,openProfile,'purple'],
+        ].map(([title,caption,icon,action,tone])=><Button className={`dw-quick-action ${tone}`} key={title} onClick={action}><Box>{icon}</Box><span><strong>{title}</strong><small>{caption}</small></span></Button>)}</Box></Box>
       </Box>}
 
       {section === 'orders' && <>
@@ -463,9 +459,9 @@ const DeliveryWorkspace = ({ section = 'dashboard' }) => {
         <TextField label="Driving licence number" value={profile.licenseNumber} onChange={(event) => setProfile({ ...profile, licenseNumber: event.target.value })} />
         <TextField sx={{ gridColumn: '1 / -1' }} label="Address" multiline minRows={2} value={profile.address} onChange={(event) => setProfile({ ...profile, address: event.target.value })} />
         <Typography sx={{ gridColumn: '1 / -1', fontWeight: 800 }}>Change password</Typography>
-        <TextField label="Current password" type="password" value={profile.current} onChange={(event) => setProfile({ ...profile, current: event.target.value })} error={Boolean(errors.current || errors.form)} helperText={errors.current || errors.form} />
-        <TextField label="New password" type="password" value={profile.next} onChange={(event) => setProfile({ ...profile, next: event.target.value })} error={Boolean(errors.next)} helperText={errors.next} inputProps={{ minLength: 8, maxLength: 100, autoComplete: 'new-password' }} />
-        <TextField label="Confirm password" type="password" autoComplete="new-password" value={profile.confirm} onChange={(event) => setProfile({ ...profile, confirm: event.target.value })} error={Boolean(errors.confirm)} helperText={errors.confirm} />
+        <PasswordField label="Current password" autoComplete="current-password" value={profile.current} onChange={(event) => setProfile({ ...profile, current: event.target.value })} error={Boolean(errors.current || errors.form)} helperText={errors.current || errors.form} />
+        <PasswordField label="New password" autoComplete="new-password" value={profile.next} onChange={(event) => setProfile({ ...profile, next: event.target.value })} error={Boolean(errors.next)} helperText={errors.next} inputProps={{ minLength: 8, maxLength: 100 }} />
+        <PasswordField label="Confirm password" autoComplete="new-password" value={profile.confirm} onChange={(event) => setProfile({ ...profile, confirm: event.target.value })} error={Boolean(errors.confirm)} helperText={errors.confirm} />
       </DialogContent>
       <DialogActions><Button onClick={() => !user?.mustChangePassword && setProfileOpen(false)}>Cancel</Button><Button variant="contained" onClick={saveProfile}>Save Profile</Button></DialogActions>
     </Dialog>

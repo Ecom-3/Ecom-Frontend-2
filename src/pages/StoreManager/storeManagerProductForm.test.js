@@ -11,7 +11,7 @@ test('creates normalized product slugs and reports required fields', () => {
 
 test('requires a priced variant for active products and validates image URLs', () => {
   assert.match(validateStoreManagerProductForm({ name:'Pickle', sku:'P-1', categoryId:'c1', status:'ACTIVE' }).variants, /active product needs/i);
-  assert.match(validateStoreManagerProductForm({ name:'Pickle', sku:'P-1', categoryId:'c1', status:'ACTIVE', variants:[{sku:'V-1',name:'250 g',price:50,active:true}], images:[{url:'javascript:bad'}] }).images, /HTTP or HTTPS/i);
+  assert.match(validateStoreManagerProductForm({ name:'Pickle', sku:'P-1', categoryId:'c1', status:'ACTIVE', variants:[{sku:'V-1',name:'250 g',price:50,active:true}], images:[{url:'javascript:bad'}] }).images, /Google Drive image link/i);
 });
 
 test('builds a store-scoped product payload without global promotion flags', () => {

@@ -305,7 +305,7 @@
 }
 
 .checkout-address-map iframe { display: block; width: 100%; height: 100%; min-height: 0; border: 0; }
-.checkout-map-placeholder { display: grid; place-content: center; height: 100%; min-height: 0; }
+.checkout-map-placeholder { display: grid; place-content: center; justify-items: center; gap: 8px; height: 100%; min-height: 0; padding: 14px; color: var(--checkout-muted); text-align: center; font-size: 12px; }
 .checkout-map-placeholder svg { color: var(--checkout-green); }
 
 .checkout-instructions-link.MuiButton-root { min-height: 25px; margin-top: 5px; padding: 2px 4px; color: #607168; font-size: 10px; text-transform: none; }

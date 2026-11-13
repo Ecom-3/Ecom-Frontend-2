@@ -10,6 +10,7 @@ import fallbackProductImage from '../../assets/images/mango_pickle_jar.png';
 import './ProductCard.css';
 import { getPublicInventoryAvailability } from '../../services/inventoryApi';
 import { loadProductStock } from '../../utils/productStock.js';
+import { normalizeWeightLabel } from '../../utils/productVariantData.js';
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const dbVariantId = (value) => UUID_PATTERN.test(String(value || '')) ? value : null;
@@ -45,7 +46,7 @@ const ProductCard = ({ title, weight, price, image, ...details }) => {
   const cardRef = useRef(null);
   const [inView, setInView] = useState(typeof IntersectionObserver === 'undefined');
   useEffect(() => {
-    if (!user?.id || !inView || !stockStoreId || !productId) return undefined;
+    if (!inView || !stockStoreId || !productId) return undefined;
     let active = true;
     (async () => {
       let firstUnavailable = null;
@@ -67,9 +68,9 @@ const ProductCard = ({ title, weight, price, image, ...details }) => {
     return () => { active = false; };
   }, [user?.id, inView, stockStoreId, productId, variantScope, stockScope, stockAttempt]);
   const currentStock = stockForScope;
-  const checkingStock = Boolean(user?.id && !currentStock);
-  const stockError = Boolean(user?.id && currentStock?.state === 'error');
-  const noStock = Boolean(user?.id && currentStock && currentStock.state !== 'available');
+  const checkingStock = Boolean(stockStoreId && productId && !currentStock);
+  const stockError = Boolean(currentStock?.state === 'error');
+  const noStock = details.available === false || Boolean(currentStock && currentStock.state !== 'available');
   useEffect(() => {
     const node = cardRef.current;
     if (!node || inView) return undefined;
@@ -105,7 +106,7 @@ const ProductCard = ({ title, weight, price, image, ...details }) => {
     ? [Number.isFinite(quoteDistance) && quoteDistance > 0 ? `${quoteDistance} KM by road` : '', primaryMethod?.deliveryType || 'Delivery', primaryMethod?.estimatedTime || '', quoteCharge > 0 ? formatCurrency(quoteCharge) : 'Free delivery'].filter(Boolean).join(' | ')
     : quote?.deliveryAvailable === false ? 'Delivery unavailable' : `${etaLabel} | ${delivery.chargeLabel}`;
 
-  const variantWeight = selectedVariant.weight || selectedVariant.label || weight;
+  const variantWeight = normalizeWeightLabel(selectedVariant.weight || selectedVariant.label || weight);
   const variantPrice = selectedVariant.price ?? price;
   const product = { ...details, id: productId, productId, variantId, selectedVariant, title, name:details.name || title, weight:variantWeight, price: Number(variantPrice), image: cardImage, storeId:store?.id || details.storeId, store:store?.name || details.store || details.storeName };
   const cartItem = cartItems.find((item) => sameCatalogItem(item, product));
@@ -162,6 +163,8 @@ const ProductCard = ({ title, weight, price, image, ...details }) => {
           className="product-card-img"
           onError={() => setImageSrc(fallbackProductImage)}
         />
+        {details.available === false ? <Box className="product-stock-image-badge" role="status">Unavailable</Box> : currentStock?.state === 'out' && <Box className="product-stock-image-badge" role="status">Out of stock</Box>}
+        {currentStock?.state === 'available' && currentStock.lowStock && <Box className="product-stock-image-badge low" role="status">Only a few available</Box>}
         <IconButton
           aria-label={isWishlisted ? `Remove ${title} from wishlist` : `Add ${title} to wishlist`}
           onClick={(event) => { event.stopPropagation(); toggleWishlist(product); }}

@@ -17,8 +17,11 @@ export default function LocationMapPicker({ latitude, longitude, onCoordinatesCh
   const mapRef = useRef(null);
   const markerRef = useRef(null);
   const onCoordinatesChangeRef = useRef(onCoordinatesChange);
+  const onApplyAddressRef = useRef(onApplyAddress);
   const placePointRef = useRef(null);
+  const selectedPointRef = useRef(null);
   const reverseTimer = useRef(null);
+  const lookupSequence = useRef(0);
   const [query, setQuery] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -28,6 +31,10 @@ export default function LocationMapPicker({ latitude, longitude, onCoordinatesCh
   const placePoint = useCallback((lat, lng, { pan = true, lookup = false } = {}) => {
     if (!validPoint(lat, lng)) return;
     const point = [Number(lat), Number(lng)];
+    selectedPointRef.current = point;
+    const lookupId = ++lookupSequence.current;
+    clearTimeout(reverseTimer.current);
+    setSuggestion(null);
     const map = mapRef.current;
     if (map) {
       if (!markerRef.current) {
@@ -45,17 +52,27 @@ export default function LocationMapPicker({ latitude, longitude, onCoordinatesCh
     setConfirmed(false);
     setError('');
     if (lookup) {
-      clearTimeout(reverseTimer.current);
       reverseTimer.current = setTimeout(async () => {
         setBusy(true);
-        try { setSuggestion(await reverseGeocodeOpenStreetMap(point[0], point[1])); }
-        catch (lookupError) { setSuggestion(null); setError(`${lookupError.message || 'Could not look up an address for this point.'} You can still use the coordinates.`); }
-        finally { setBusy(false); }
+        try {
+          const place = await reverseGeocodeOpenStreetMap(point[0], point[1]);
+          if (lookupId !== lookupSequence.current) return;
+          setSuggestion(place);
+          if (place) onApplyAddressRef.current?.({ ...place, lat: point[0], lng: point[1], provider: 'OPENSTREETMAP' });
+        } catch (lookupError) {
+          if (lookupId === lookupSequence.current) {
+            setSuggestion(null);
+            setError(`${lookupError.message || 'Could not look up an address for this point.'} You can still use the coordinates.`);
+          }
+        } finally {
+          if (lookupId === lookupSequence.current) setBusy(false);
+        }
       }, 700);
     }
   }, []);
 
   useEffect(() => { onCoordinatesChangeRef.current = onCoordinatesChange; }, [onCoordinatesChange]);
+  useEffect(() => { onApplyAddressRef.current = onApplyAddress; }, [onApplyAddress]);
   useEffect(() => { placePointRef.current = placePoint; }, [placePoint]);
 
   useEffect(() => {
@@ -66,7 +83,11 @@ export default function LocationMapPicker({ latitude, longitude, onCoordinatesCh
       attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
     }).addTo(map);
     mapRef.current = map;
-    map.on('click', (event) => placePoint(event.latlng.lat, event.latlng.lng, { pan: false, lookup: true }));
+    const selectMapPoint = (event) => {
+      const { lat: selectedLat, lng: selectedLng } = event.latlng;
+      placePointRef.current?.(selectedLat, selectedLng, { pan: false, lookup: true });
+    };
+    map.on('click', selectMapPoint);
     const resize = () => map.invalidateSize();
     const observer = new ResizeObserver(resize);
     observer.observe(mapHost.current);
@@ -74,18 +95,22 @@ export default function LocationMapPicker({ latitude, longitude, onCoordinatesCh
     return () => {
       clearTimeout(modalResize);
       clearTimeout(reverseTimer.current);
+      map.off('click', selectMapPoint);
       observer.disconnect();
       map.remove();
       mapRef.current = null;
       markerRef.current = null;
     };
-  }, [placePoint]);
+  }, []);
 
   // Create/reposition the marker when opening an edit form or typing coordinates.
   useEffect(() => {
     if (latitude === '' || latitude == null || longitude === '' || longitude == null) return;
     if (!validPoint(latitude, longitude) || !mapRef.current) return;
     const point = [Number(latitude), Number(longitude)];
+    const previousPoint = selectedPointRef.current;
+    if (previousPoint && Math.abs(previousPoint[0] - point[0]) < 1e-8 && Math.abs(previousPoint[1] - point[1]) < 1e-8) return;
+    selectedPointRef.current = point;
     if (!markerRef.current) {
       markerRef.current = L.marker(point, { draggable: true, icon: pin }).addTo(mapRef.current);
       markerRef.current.on('dragend', (event) => {
@@ -105,7 +130,7 @@ export default function LocationMapPicker({ latitude, longitude, onCoordinatesCh
       const result = await geocodeOpenStreetMap(text);
       if (!result) { setError('No matching address found. Try adding the city or pincode.'); return; }
       placePoint(result.lat, result.lng, { lookup: false });
-      setSuggestion(result);
+      setSuggestion(result); onApplyAddressRef.current?.({ ...result, lat: Number(result.lat), lng: Number(result.lng), provider: 'OPENSTREETMAP' });
     } catch (lookupError) {
       setError(lookupError.message || 'Address search failed. Please try again shortly.');
     } finally { setBusy(false); }
@@ -117,7 +142,7 @@ export default function LocationMapPicker({ latitude, longitude, onCoordinatesCh
 
   return <Box className="location-map-picker">
     <Typography variant="subtitle1" fontWeight={800}>Verify Location on Map</Typography>
-    <Typography variant="body2" color="text.secondary">Search for a place or click the map to set its coordinates. Address suggestions are only applied when you choose them.</Typography>
+    <Typography variant="body2" color="text.secondary">Search for a place, click the map, or drag the marker to set the exact store location. Address details will fill from the selected point when available; you can edit any field manually.</Typography>
     <Box className="location-map-search">
       <TextField fullWidth size="small" label="Search address, area, city, or pincode" value={query} onChange={(event) => setQuery(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter') { event.preventDefault(); search(); } }} />
       <Button variant="outlined" onClick={search} disabled={busy}>{busy ? <CircularProgress size={19} /> : 'Search'}</Button>
@@ -129,12 +154,12 @@ export default function LocationMapPicker({ latitude, longitude, onCoordinatesCh
     </Box>
     {suggestion && <Box className="location-map-suggestion">
       <Box><Typography variant="caption" color="text.secondary">Suggested address</Typography><Typography variant="body2">{addressSummary(suggestion) || suggestion.subtitle || `${suggestion.lat}, ${suggestion.lng}`}</Typography></Box>
-      {onApplyAddress && <Button size="small" onClick={() => onApplyAddress(suggestion)}>Use suggested address</Button>}
+      {onApplyAddress && <Button size="small" onClick={() => { onApplyAddress(suggestion); setConfirmed(true); }}>Use suggested address</Button>}
     </Box>}
     {error && <Typography color="error" variant="body2">{error}</Typography>}
     {!hasCoordinates && (latitude || longitude) && <Typography color="error" variant="body2">Enter a complete coordinate pair within latitude −90 to 90 and longitude −180 to 180.</Typography>}
     <Box className="location-map-confirm-row">
-      <Button variant="contained" disabled={!hasCoordinates} onClick={() => { setConfirmed(true); setError(''); }}>Use This Location</Button>
+      <Button variant="contained" disabled={!hasCoordinates} onClick={() => { placePoint(lat, lng, { pan: false, lookup: true }); setConfirmed(true); }}>Use This Location</Button>
       {confirmed && <Typography color="success.main" variant="body2">Coordinates selected and ready to save.</Typography>}
     </Box>
   </Box>;

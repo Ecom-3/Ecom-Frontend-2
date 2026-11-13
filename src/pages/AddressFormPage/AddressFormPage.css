@@ -73,7 +73,18 @@
   display: flex;
   flex-direction: column;
   gap: 16px;
+  width: 100%;
+  max-width: 760px;
+  margin: 0 auto;
 }
+
+.address-location-picker { display: grid; gap: 9px; }
+.address-location-options { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.address-location-option { min-height: 48px; border: 1px solid #cbd5e1 !important; border-radius: 9px !important; color: #475569 !important; background: #fff !important; font-weight: 600 !important; text-transform: none !important; }
+.address-location-option.active { border-color: #075F40 !important; color: #075F40 !important; background: #ecfdf5 !important; box-shadow: inset 0 0 0 1px #075F40; }
+.pin-lookup-input-wrap { display: flex; align-items: center; gap: 10px; }
+.pin-lookup-input-wrap .custom-form-input { flex: 1; }
+.pin-lookup-status { color: #64748b; font-size: .75rem !important; }
 
 .form-field-group {
   display: flex;
@@ -111,6 +122,16 @@
 
 .custom-form-input:focus {
   border-color: #075F40;
+}
+
+.custom-form-input[aria-invalid="true"] {
+  border-color: #dc2626;
+  box-shadow: 0 0 0 1px rgba(220, 38, 38, .16);
+}
+
+.custom-form-input[aria-invalid="true"]:focus {
+  border-color: #b91c1c;
+  box-shadow: 0 0 0 2px rgba(220, 38, 38, .14);
 }
 
 .custom-form-input::placeholder {
@@ -221,4 +242,11 @@
   font-size: 0.95rem !important;
   font-weight: 800 !important;
   color: #1e293b;
+}
+
+@media (max-width: 560px) {
+  .form-page-scroll { padding: 12px 12px 96px; gap: 14px; }
+  .loc-summary-card { align-items: flex-start; flex-direction: column; gap: 10px; }
+  .change-loc-btn { align-self: stretch; }
+  .address-location-options { grid-template-columns: 1fr; }
 }

@@ -1,5 +1,5 @@
 import { numericValue } from '../utils/productBrowsing.js';
-import { normalizeProductImageUrl, parseVariantAttributes, variantChoiceLabel } from '../utils/productVariantData.js';
+import { normalizeProductImageUrl, normalizeWeightLabel, parseVariantAttributes, variantChoiceLabel } from '../utils/productVariantData.js';
 import { bannerImageFor, categoryImageFor, productImageFor } from './categoryImages';
 export { parseVariantAttributes, variantChoiceLabel } from '../utils/productVariantData.js';
 
@@ -62,7 +62,7 @@ export const adaptVariant = (variant, fallbackProduct = {}) => {
   const price = pickPrice(variant?.price ?? variant?.sellingPrice ?? variant?.mrp ?? 0);
   const compareAt = pickPrice(variant?.compareAtPrice ?? variant?.mrp ?? variant?.price ?? 0);
   const id = variant?.variantId || variant?.id || null;
-  const label = variantChoiceLabel({ ...variant, attributes }) || variant?.name || attributes.weight || attributes.size || '';
+  const label = normalizeWeightLabel(variantChoiceLabel({ ...variant, attributes }) || variant?.name || attributes.weight || attributes.size || '');
   return {
     id,
     variantId: id,
@@ -74,7 +74,7 @@ export const adaptVariant = (variant, fallbackProduct = {}) => {
     priceKnown: numericValue(variant?.price ?? variant?.sellingPrice ?? variant?.mrp) !== null,
     attributes,
     active: variant?.active ?? true,
-    weight: extractWeight(variant, fallbackProduct.weight || ''),
+    weight: normalizeWeightLabel(extractWeight(variant, fallbackProduct.weight || '')),
     image: safeImageUrl(variant?.image || fallbackProduct.image),
     compareAtPrice: compareAt > price ? compareAt : price,
   };

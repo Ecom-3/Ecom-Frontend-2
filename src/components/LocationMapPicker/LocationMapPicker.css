@@ -1,6 +1,8 @@
 .location-map-picker { grid-column: 1 / -1; display: grid; gap: 12px; padding: 16px; border: 1px solid #dce9e3; border-radius: 10px; background: #f8fafc; }
 .location-map-search { display: flex; align-items: center; gap: 10px; }
-.location-map-canvas { width: 100%; height: clamp(300px, 42vh, 440px); min-height: 300px; border: 1px solid #cbd5e1; border-radius: 8px; overflow: hidden; background: #e8f0ed; z-index: 0; }
+.location-map-canvas { position: relative; width: 100%; height: clamp(300px, 42vh, 440px); min-height: 300px; border: 1px solid #cbd5e1; border-radius: 8px; overflow: hidden; background: #e8f0ed; z-index: 0; cursor: crosshair; touch-action: none; }
+.location-map-canvas .leaflet-marker-draggable { cursor: grab; }
+.location-map-canvas .leaflet-marker-draggable:active { cursor: grabbing; }
 .location-map-coordinates, .location-map-confirm-row, .location-map-suggestion { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
 .location-map-suggestion { padding: 10px 12px; border: 1px solid #b7d9cb; border-radius: 8px; background: #fff; }
 .location-map-pin-wrap { background: transparent; border: 0; }

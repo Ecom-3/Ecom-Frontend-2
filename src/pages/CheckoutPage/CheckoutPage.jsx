@@ -13,7 +13,7 @@ import PersonOutlineOutlinedIcon from '@mui/icons-material/PersonOutlineOutlined
 import AddLocationAltOutlinedIcon from '@mui/icons-material/AddLocationAltOutlined';
 import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
 import DeleteOutlineOutlinedIcon from '@mui/icons-material/DeleteOutlineOutlined';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { AppContext } from '../../context/AppContext';
 import { hasCompleteProfile } from '../../utils/profileCompletion';
 import { checkoutReviewError } from '../../utils/checkoutPolicy';
@@ -22,10 +22,11 @@ import { getCachedStoreDeliveryQuote } from '../../services/catalogApi';
 import { resolveProductStore } from '../../services/productStoreResolver';
 import { totalDeliveryCharge } from '../../services/cartDeliveryLines';
 import { deliveryMethodId, isGlobalProduct, isGlobalStore, preferredDeliveryMethod, sortDeliveryMethods } from '../../utils/storeDelivery';
-import { openStreetMapEmbedUrl } from '../../services/openStreetMapService';
+import { geocodeOpenStreetMap, openStreetMapEmbedUrl, searchDeliveryLocations } from '../../services/openStreetMapService';
 import { formatIndianMobile, isValidIndianMobile } from '../../utils/phoneValidation';
 import SafeProductImage from '../../components/SafeProductImage/SafeProductImage';
 import DigitalTimePicker from './DigitalTimePicker';
+import { isValidImageUrl, normalizeImageUrl } from '../../utils/imageUrl.js';
 import './CheckoutPage.css';
 
 const normalizeAddressText = (value) => String(value || '').toLowerCase().replace(/\s+/g, ' ').trim();
@@ -53,39 +54,51 @@ const updateStoreSelection = (setSelections, storeId, patch) => setSelections((c
   [storeId]: { ...selectionForStore(current, storeId), ...patch },
 }));
 
-const generateRequestedTimes = ({ date }) => {
-  void date;
-  return Array.from({ length: 96 }, (_, index) => formatClockTime(index * 15));
+const configuredSlots = (method) => {
+  let config = method?.settingsConfiguration || method?.configuration || {};
+  if (typeof config === 'string') { try { config = JSON.parse(config); } catch { config = {}; } }
+  const slots = Array.isArray(config) ? config : config.slots || config.timeSlots || [];
+  return slots.map((slot) => {
+    if (typeof slot === 'string' && /^\d{2}:\d{2}$/.test(slot)) return { value: slot, label: formatSlotValue(slot) };
+    if (typeof slot === 'string' && /^\d{2}:\d{2}-\d{2}:\d{2}$/.test(slot)) return { value: slot, label: slot };
+    if (slot && typeof slot === 'object' && slot.available !== false && slot.enabled !== false) {
+      const value = slot.value || slot.startTime || slot.start;
+      if (value) return { value, label: slot.label || slot.name || (String(value).length === 5 ? formatSlotValue(value) : String(value)) };
+    }
+    return null;
+  }).filter(Boolean);
 };
 
 const CheckoutPage = () => {
   const navigate = useNavigate();
-  const { cartItems, removeFromCart, deliveryAddress, setDeliveryAddress, user, addresses, orderAddresses, setDefaultAddress, formatCurrency, userCity, catalogProducts, catalogStores, selectedLocation, clearSelectedLocation } = useContext(AppContext);
-  const [selectedAddressId, setSelectedAddressId] = useState('');
+  const location = useLocation();
+  const restoredCheckout = location.state?.checkout || (() => { try { return JSON.parse(sessionStorage.getItem('metaarch.checkoutDraft') || '{}'); } catch { return {}; } })();
+  const { cartItems, removeFromCart, deliveryAddress, setDeliveryAddress, user, addresses, setDefaultAddress, formatCurrency, userCity, catalogProducts, catalogStores, selectedLocation, clearSelectedLocation } = useContext(AppContext);
+  const [selectedAddressId, setSelectedAddressId] = useState(restoredCheckout.selectedAddressId || '');
   const [addressPickerOpen, setAddressPickerOpen] = useState(false);
-  const [fulfillmentByStore, setFulfillmentByStore] = useState({});
-  const [savedFulfillmentByStore, setSavedFulfillmentByStore] = useState({});
+  const [fulfillmentByStore, setFulfillmentByStore] = useState(restoredCheckout.storeSelections || {});
+  const [savedFulfillmentByStore, setSavedFulfillmentByStore] = useState(restoredCheckout.storeSelections || {});
   const [expandedStoreId, setExpandedStoreId] = useState(null);
   const [deliveryQuotesByStore, setDeliveryQuotesByStore] = useState({});
   const [scheduleDateOffsets, setScheduleDateOffsets] = useState({});
 
-  const [notes, setNotes] = useState('');
+  const [notes, setNotes] = useState(restoredCheckout.notes || '');
   const [deliveryInstructionsOpen, setDeliveryInstructionsOpen] = useState(false);
   const [deliveryInstructions, setDeliveryInstructions] = useState('');
-  const [deliveryPhotos, setDeliveryPhotos] = useState([]);
-  const [coupon, setCoupon] = useState('');
-  const [appliedCoupon, setAppliedCoupon] = useState(null);
+  const [deliveryPhotoUrls, setDeliveryPhotoUrls] = useState([]);
+  const [deliveryPhotoUrl, setDeliveryPhotoUrl] = useState('');
+  const [coupon, setCoupon] = useState(restoredCheckout.coupon || '');
+  const [appliedCoupon, setAppliedCoupon] = useState(restoredCheckout.appliedCoupon || null);
   const [couponMessage, setCouponMessage] = useState('');
   const [couponBusy, setCouponBusy] = useState(false);
   const [error, setError] = useState('');
   useEffect(() => {
     if (sessionStorage.getItem(COMPLETED_CHECKOUT_RETURN_KEY)) navigate('/cart', { replace: true });
   }, [navigate]);
-  const selectableAddresses = useMemo(() => {
-    const savedKeys = new Set(addresses.map((item) => normalizeAddressText(item.address)));
-    const past = (orderAddresses || []).filter((item) => !savedKeys.has(normalizeAddressText(item.address)));
-    return { saved: addresses, past, all: [...addresses, ...past] };
-  }, [addresses, orderAddresses]);
+  // Checkout choices mirror the addresses the customer can manage in Profile.
+  // Historical order snapshots remain attached to orders, but aren't presented
+  // as extra saved addresses here.
+  const selectableAddresses = useMemo(() => ({ saved: addresses, all: addresses }), [addresses]);
   useEffect(() => {
     if (selectedLocation?.address) {
       // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -94,6 +107,12 @@ const CheckoutPage = () => {
          
         setDeliveryAddress(selectedLocation.address);
       }
+      return;
+    }
+    if (selectedAddressId && selectableAddresses.all.some((item) => item.id === selectedAddressId)
+      && restoredCheckout.selectedAddressId === selectedAddressId && restoredCheckout.selectedAddressSnapshot) {
+      const snapshotAddress = restoredCheckout.selectedAddressSnapshot.address || deliveryAddress;
+      if (snapshotAddress && deliveryAddress !== snapshotAddress) setDeliveryAddress(snapshotAddress);
       return;
     }
     if (selectedAddressId && selectableAddresses.all.some((item) => item.id === selectedAddressId)) return;
@@ -116,19 +135,54 @@ const CheckoutPage = () => {
     latitude: selectedLocation.latitude,
     longitude: selectedLocation.longitude,
   } : null;
-  const selectedAddress = selectedLocationAddress || selectableAddresses.all.find((item) => item.id === selectedAddressId)
+  const selectedAddress = selectedLocationAddress || (selectableAddresses.all.some((item) => item.id === selectedAddressId) && selectedAddressId === restoredCheckout.selectedAddressId ? restoredCheckout.selectedAddressSnapshot : null) || selectableAddresses.all.find((item) => item.id === selectedAddressId)
     || addresses.find((item) => item.isDefault) || addresses[0] || {};
   const addressForEdit = selectedAddressId === 'selected-location' ? matchingSavedAddress : selectableAddresses.all.find((item) => item.id === selectedAddressId);
   const displayedAddresses = selectedLocationAddress?.id === selectedAddressId
     ? [selectedLocationAddress, ...selectableAddresses.all.filter((item) => item.id !== selectedLocationAddress.id)].slice(0, 3)
     : selectableAddresses.all.slice(0, 3);
   const initialContactPhone = user?.phone || user?.mobile || selectedAddress.phone || '';
-  const [contactPhone, setContactPhone] = useState(initialContactPhone);
-  const [contactDraft, setContactDraft] = useState(initialContactPhone);
+  const [contactPhone, setContactPhone] = useState(restoredCheckout.contactNumber || initialContactPhone);
+  const [contactDraft, setContactDraft] = useState(restoredCheckout.contactNumber || initialContactPhone);
   const [contactEditing, setContactEditing] = useState(false);
   const [contactError, setContactError] = useState('');
-  const customerLat = Number(selectedAddress.coordinates?.lat ?? selectedAddress.latitude);
-  const customerLng = Number(selectedAddress.coordinates?.lng ?? selectedAddress.longitude);
+  const coordinatePair = selectedAddress.coordinates || selectedAddress;
+  const customerLat = Number(coordinatePair?.lat ?? coordinatePair?.latitude);
+  const customerLng = Number(coordinatePair?.lng ?? coordinatePair?.longitude);
+  const hasCustomerCoordinates = Number.isFinite(customerLat) && Math.abs(customerLat) <= 90
+    && Number.isFinite(customerLng) && Math.abs(customerLng) <= 180
+    && (customerLat !== 0 || customerLng !== 0);
+  const [resolvedAddressPoint, setResolvedAddressPoint] = useState(null);
+  const addressPincode = String(selectedAddress.manualLocation?.pincode || selectedAddress.pincode || selectedAddress.postcode || selectedLocation?.pincode || '').trim();
+  const addressMapQuery = [
+    selectedAddress.manualLocation?.street,
+    selectedAddress.manualLocation?.village,
+    selectedAddress.manualLocation?.city || selectedAddress.city,
+    selectedAddress.manualLocation?.state || selectedAddress.state,
+    addressPincode,
+    'India',
+  ].filter(Boolean).join(', ') || selectedAddress.address || deliveryAddress || '';
+  const selectedAddressKey = selectedAddress.id || addressMapQuery;
+  useEffect(() => {
+    if (hasCustomerCoordinates || !addressMapQuery.trim()) {
+      setResolvedAddressPoint(null);
+      return undefined;
+    }
+    let cancelled = false;
+    const findAddressPoint = async () => {
+      if (/^[1-9]\d{5}$/.test(addressPincode)) {
+        const postalMatches = await searchDeliveryLocations(addressPincode);
+        const located = postalMatches.find((place) => Number.isFinite(place.latitude) && Number.isFinite(place.longitude));
+        if (located) return { lat: located.latitude, lng: located.longitude };
+      }
+      const result = await geocodeOpenStreetMap(addressMapQuery);
+      return result && Number.isFinite(result.lat) && Number.isFinite(result.lng) ? { lat: result.lat, lng: result.lng } : null;
+    };
+    findAddressPoint().then((point) => {
+      if (!cancelled) setResolvedAddressPoint(point ? { ...point, addressKey: selectedAddressKey } : null);
+    }).catch(() => { if (!cancelled) setResolvedAddressPoint(null); });
+    return () => { cancelled = true; };
+  }, [hasCustomerCoordinates, addressMapQuery, addressPincode, selectedAddressKey]);
   useEffect(() => {
     if (sessionStorage.getItem(COMPLETED_CHECKOUT_RETURN_KEY)) return;
     if (!hasCompleteProfile(user, [{}])) {
@@ -232,6 +286,8 @@ const CheckoutPage = () => {
   const hasDeliverySelection = cartStoreGroups.some((group) => !group.global && savedFulfillmentByStore[group.id]?.fulfillment === 'delivery');
   const requiresDeliveryAddress = hasGlobalDelivery || hasDeliverySelection;
   const deliveryFee = totalDeliveryCharge(deliveryLines);
+  const deliveryFeePending = deliveryLines.some((line) => line.fulfillmentType === 'nearby'
+    && line.deliveryType !== 'pickup' && (line.quoteUnavailable || line.notConfigured));
   const handlingFee = cartStoreGroups.filter((group) => !group.global).length * 5;
   const deliveryGroups = deliveryLines.reduce((groups, line) => {
     const key = `${line.fulfillmentType || 'checking'}:${line.storeId || 'store'}:${line.deliveryType || 'delivery'}`;
@@ -261,7 +317,8 @@ const CheckoutPage = () => {
     }
     chooseSavedAddress(address);
   };
-  const checkoutMapUrl = Number.isFinite(customerLat) && Number.isFinite(customerLng) ? openStreetMapEmbedUrl({ lat: customerLat, lng: customerLng, delta: 0.006 }) : '';
+  const mapPoint = hasCustomerCoordinates ? { lat: customerLat, lng: customerLng } : resolvedAddressPoint?.addressKey === selectedAddressKey ? resolvedAddressPoint : null;
+  const checkoutMapUrl = mapPoint ? openStreetMapEmbedUrl({ ...mapPoint, delta: 0.006 }) : '';
   const scheduleDatesFor = (group) => {
     const today = new Date();
     const offset = scheduleDateOffsets[group.id] || 0;
@@ -288,8 +345,8 @@ const CheckoutPage = () => {
   };
   const scheduleSlotsFor = (group) => {
     const selection = selectionForStore(fulfillmentByStore, group.id, initialFulfillment);
-    const date = selection.date || scheduleDatesFor(group)[0]?.value;
-    return generateRequestedTimes({ date });
+    if (selection.fulfillment === 'pickup') return configuredSlots(group.store.pickupSettings || group.store.pickupConfiguration || group.store.settingsConfiguration);
+    return configuredSlots(selectedDeliveryMethodFor(group));
   };
   const chosenSlotFor = (group) => {
     const selection = selectionForStore(fulfillmentByStore, group.id, initialFulfillment);
@@ -388,21 +445,25 @@ const CheckoutPage = () => {
     const deliveryModeForCheckout = cartStoreGroups.some((group) => !group.global && savedFulfillmentByStore[group.id]?.fulfillment === 'pickup')
       ? (hasDeliverySelection || hasGlobalDelivery ? 'mixed' : 'pickup') : 'delivery';
     const firstSelection = cartStoreGroups[0] ? (savedFulfillmentByStore[cartStoreGroups[0].id] || {}) : {};
-    navigate('/payment-options', { state: { checkout: {
+    const checkoutDraft = {
       method: deliveryLines.length === 1 ? firstLine.deliveryType : 'mixed', deliveryMode: deliveryModeForCheckout,
       fulfillmentType: isGlobalReview ? 'mixed' : 'nearby', channel: isGlobalReview ? 'Global Fulfillment' : 'Nearby Store',
       globalApproval: isGlobalReview ? 'Pending' : 'Not Required', deliveryLines,
       sourceStoreId: sourceStoreId, sourceStore: sourceStoreName, sourceLocation: selectedStore?.location || '', sourceState: selectedStore?.state || '',
       date: firstLine.scheduleDate || '', slot: firstLine.scheduleSlot || '',
-      notes: notes.trim(), coupon: appliedCoupon?.name || '', discount, promotionVerified:Boolean(appliedCoupon), subtotal, deliveryFee,
+      notes: notes.trim(), coupon: appliedCoupon?.name || '', appliedCoupon, discount, promotionVerified:Boolean(appliedCoupon), subtotal, deliveryFee,
       handlingFee, total, deliveryAddress: requiresDeliveryAddress ? (selectedLocation?.address || deliveryAddress) : '',
+      selectedAddressId: selectedAddressId !== 'selected-location' ? selectedAddressId : (matchingSavedAddress?.id || null),
+      selectedAddressSnapshot: requiresDeliveryAddress ? { ...selectedAddress, selectedAddressId: selectedAddressId !== 'selected-location' ? selectedAddressId : (matchingSavedAddress?.id || null), address: selectedLocation?.address || selectedAddress.address || deliveryAddress } : null,
       contactNumber: contactPhone, customerLocation: String(selectedLocation?.city || userCity || '').trim().slice(0, 150),
       deliveryQuote: deliveryLines.find((line) => line.fulfillmentType !== 'global' && line.quote)?.quote || null,
       customerLatitude: Number.isFinite(customerLat) ? customerLat : null, customerLongitude: Number.isFinite(customerLng) ? customerLng : null,
       storeLatitude: selectedStore?.latitude ?? null, storeLongitude: selectedStore?.longitude ?? null,
       storeSelections: Object.fromEntries(cartStoreGroups.map((group) => [group.id, savedFulfillmentByStore[group.id] || selectionForStore(fulfillmentByStore, group.id, initialFulfillment)])),
       pickupStore: firstSelection.fulfillment === 'pickup' ? sourceStoreName : '',
-    } } });
+    };
+    sessionStorage.setItem('metaarch.checkoutDraft', JSON.stringify(checkoutDraft));
+    navigate('/payment-options', { state: { checkout: checkoutDraft } });
   };
   const editContactNumber = () => {
     setContactDraft(contactPhone);
@@ -426,7 +487,7 @@ const CheckoutPage = () => {
 
   return <Box className="checkout-page">
     <Box component="header" className="checkout-header">
-      <Box className="checkout-breadcrumb"><button type="button" onClick={() => navigate('/home')}>Home</button><span>â€º</span><button type="button" onClick={() => navigate('/cart')}>Cart</button><span>â€º</span><strong>Checkout</strong></Box>
+      <Box className="checkout-breadcrumb"><button type="button" onClick={() => navigate('/home')}>Home</button><span aria-hidden="true">›</span><button type="button" onClick={() => navigate('/cart')}>Cart</button><span aria-hidden="true">›</span><strong>Checkout</strong></Box>
       <Box component="nav" aria-label="Checkout progress" className="checkout-stepper">
         <Box className="checkout-step complete"><span><CheckCircleOutlineOutlinedIcon /></span><b>Cart</b></Box><i />
         <Box className="checkout-step current" aria-current="step"><span>2</span><b>Checkout</b></Box><i />
@@ -463,8 +524,8 @@ const CheckoutPage = () => {
                 </Box>)}
                 {selectableAddresses.all.length > 3 && <Button className="checkout-more-addresses" onClick={() => setAddressPickerOpen(true)}>More saved addresses</Button>}
               </Box>
-              <Box className="checkout-address-map">{checkoutMapUrl ? <iframe title="Delivery location map" src={checkoutMapUrl} /> : <Box className="checkout-map-placeholder"><LocationOnOutlinedIcon /></Box>}</Box>
-              <Button className="checkout-instructions-link" onClick={() => setDeliveryInstructionsOpen(true)}><HomeOutlinedIcon />{deliveryInstructions || deliveryPhotos.length ? 'Delivery instructions added' : 'Add delivery instructions & photos'}</Button>
+              <Box className="checkout-address-map">{checkoutMapUrl ? <iframe title="Delivery location map" src={checkoutMapUrl} /> : <Box className="checkout-map-placeholder"><LocationOnOutlinedIcon /><Typography component="span">{hasCustomerCoordinates || resolvedAddressPoint?.addressKey === selectedAddressKey ? 'Loading map…' : 'Map location unavailable for this address'}</Typography></Box>}</Box>
+              <Button className="checkout-instructions-link" onClick={() => setDeliveryInstructionsOpen(true)}><HomeOutlinedIcon />{deliveryInstructions || deliveryPhotoUrls.length ? 'Delivery instructions added' : 'Add delivery instructions & photos'}</Button>
             </Box> : <Typography className="checkout-muted">Choose delivery for a store below to use a saved address.</Typography>}
           </Box>
 
@@ -495,13 +556,14 @@ const CheckoutPage = () => {
                 const selectedDate = selection.date || dates[0]?.value || '';
                 const slots = scheduleSlotsFor(group);
                 const selectedSlot = chosenSlotFor(group);
-                const pickupReady = group.store.pickupPreparationTime || group.store.pickupPreparationMinutes && `${group.store.pickupPreparationMinutes} min` || '';
+                const pickupPreparationMinutes = Number(group.store.pickupPreparationMinutes || 30);
+                const pickupReady = group.store.pickupPreparationTime || `${pickupPreparationMinutes} min`;
                 return <Box className={`checkout-store-accordion ${expanded ? 'expanded' : ''}`} key={group.id}>
                   <button type="button" className="checkout-store-accordion-heading" aria-expanded={expanded} onClick={() => setExpandedStoreId(expanded ? '' : group.id)}>
                     <Box className="checkout-store-accordion-title"><strong>{group.name}</strong><small>{group.items.length} item{group.items.length === 1 ? '' : 's'} · {formatCurrency(group.subtotal)}</small>
                       {group.global ? <small>Global delivery</small> : savedSelection ? <small>{requiresReview ? hasUnsavedChanges ? 'Unsaved changes' : 'Delivery address changed — review this selection' : savedSelection.fulfillment === 'pickup' ? `Store pickup${savedSelection.slot ? ` · ${formatSlotValue(savedSelection.slot)}` : ''}` : `${savedSelection.deliveryMethod || savedLine?.deliveryLabel || 'Delivery'}${savedSelection.slot ? ` · ${formatSlotValue(savedSelection.slot)}` : ''}`}</small> : <small>Configure fulfillment</small>}
                     </Box>
-                    <span className={`checkout-store-save-status ${group.global || savedSelection && !requiresReview ? 'saved' : ''}`}>{group.global || savedSelection && !requiresReview ? 'Saved' : savedSelection ? 'Review changes' : 'Not configured'}</span>
+                    <span className={`checkout-store-save-status ${group.global || savedSelection && !requiresReview ? 'saved' : ''}`}>{group.global ? (cartStoreGroups.every((entry) => entry.global) ? 'Global Store Items Only' : 'Global Store Items') : savedSelection && !requiresReview ? 'Saved' : savedSelection ? 'Review changes' : 'Not configured'}</span>
                     <ChevronRightIcon className="checkout-store-chevron" />
                   </button>
                   {expanded && <Box className="checkout-store-accordion-content">
@@ -531,7 +593,7 @@ const CheckoutPage = () => {
                       <StorefrontOutlinedIcon /><Box><strong>{group.name}</strong><span>{group.store.address || group.store.location || 'Store pickup location'}</span>{pickupReady && <small>Preparation estimate: {pickupReady}</small>}{(group.store.pickupInstructions || group.store.deliveryNotes) && <small>{group.store.pickupInstructions || group.store.deliveryNotes}</small>}</Box>
                     </Box>}
                     {selection.fulfillment === 'pickup' && <Box className="checkout-pickup-options">
-                      <Button variant={selection.pickupTiming !== 'scheduled' ? 'contained' : 'outlined'} onClick={() => { updateStoreSelection(setFulfillmentByStore, group.id, { pickupTiming: 'asap', date: '', slot: '' }); setError(''); }}>Pickup when ready<small>{pickupReady ? `Preparation estimate - ${pickupReady}` : 'Ready time confirmed by store'}</small></Button>
+                      <Button variant={selection.pickupTiming !== 'scheduled' ? 'contained' : 'outlined'} onClick={() => { updateStoreSelection(setFulfillmentByStore, group.id, { pickupTiming: 'asap', date: '', slot: '' }); setError(''); }}>Pickup when ready<small>Ready in about {pickupReady}; the store will confirm when the order is ready.</small></Button>
                       <Button variant={selection.pickupTiming === 'scheduled' ? 'contained' : 'outlined'} onClick={() => { updateStoreSelection(setFulfillmentByStore, group.id, { pickupTiming: 'scheduled', date: selection.date || dates[0]?.value || '', slot: '' }); setError(''); }}>Schedule pickup<small>Request a preferred pickup time</small></Button>
                     </Box>}
                     {scheduling && <Box className="checkout-schedule-panel">
@@ -584,6 +646,7 @@ const CheckoutPage = () => {
               const isConfigured = isGlobalStore || Boolean(savedFulfillmentByStore[group.id]);
               const isPickupStore = group.lines.length > 0 && group.lines.every((line) => line.deliveryType === 'pickup');
               const storeLine = group.lines[0] || {};
+              const storeFeePending = !isGlobalStore && !isPickupStore && (!isConfigured || storeLine.quoteUnavailable || storeLine.notConfigured);
               const storeCharge = isGlobalStore || isPickupStore ? 0 : Number(storeLine.deliveryCharge || 0);
               const scheduledLabel = storeLine.scheduleSlot ? `${storeLine.scheduleDate}, ${formatClockTime(Number(storeLine.scheduleSlot.slice(0, 2)) * 60 + Number(storeLine.scheduleSlot.slice(3, 5))).label}` : '';
               const storeSubtotal = group.items.reduce((sum, item) => sum + Number(item.price || item.unitPrice || 0) * Number(item.quantity || 0), 0);
@@ -597,20 +660,20 @@ const CheckoutPage = () => {
                 </Box>)}
                 <Box className="checkout-summary-store-service"><span>Fulfillment</span><strong>{isGlobalStore ? 'India-wide delivery · 7–10 days' : isConfigured ? storeLine.deliveryLabel || (isPickupStore ? 'Store pickup' : 'Delivery') : 'Choose fulfillment'}</strong></Box>
                 <Box className="checkout-summary-breakdown-row"><span>Items subtotal</span><strong>{formatCurrency(storeSubtotal)}</strong></Box>
-                <Box className="checkout-summary-breakdown-row"><span>{isPickupStore ? 'Pickup fee' : isGlobalStore ? 'Shipping fee' : 'Delivery fee'}</span><strong>{isConfigured ? storeCharge ? formatCurrency(storeCharge) : 'No charge' : 'Pending'}</strong></Box>
+                <Box className="checkout-summary-breakdown-row"><span>{isPickupStore ? 'Pickup fee' : isGlobalStore ? 'Shipping fee' : 'Delivery fee'}</span><strong>{storeFeePending ? 'Pending quote' : storeCharge ? formatCurrency(storeCharge) : 'No charge'}</strong></Box>
                 <Box className="checkout-summary-breakdown-row"><span>Store handling</span><strong>{formatCurrency(isGlobalStore ? 0 : 5)}</strong></Box>
                 {scheduledLabel && <small className="checkout-summary-schedule">{isPickupStore ? 'Pickup' : 'Delivery'}: {scheduledLabel}</small>}
-                <Box className="checkout-summary-store-subtotal"><span>Store total before discount</span><strong>{formatCurrency(storeSubtotal + (isConfigured ? storeCharge : 0) + (isGlobalStore ? 0 : 5))}</strong></Box>
+                <Box className="checkout-summary-store-subtotal"><span>{storeFeePending ? 'Known total (delivery pending)' : 'Store total before discount'}</span><strong>{formatCurrency(storeSubtotal + (isConfigured && !storeFeePending ? storeCharge : 0) + (isGlobalStore ? 0 : 5))}</strong></Box>
               </Box>;
             })}
           </Box>
           {appliedCoupon && <Box className="checkout-summary-discount"><LocalOfferOutlinedIcon /><span>Coupon {appliedCoupon.code || appliedCoupon.couponCode || 'applied'}</span><strong>Applied</strong></Box>}
           <Box className="checkout-summary-totals">
             <Box><span>Subtotal ({cartItems.length} items)</span><strong>{formatCurrency(subtotal)}</strong></Box>
-            <Box><span>Delivery Fee</span><strong>{quoteLoading ? 'Calculatingâ€¦' : formatCurrency(deliveryFee)}</strong></Box>
+            <Box><span>Delivery Fee</span><strong>{quoteLoading ? 'Calculatingâ€¦' : deliveryFeePending ? 'Pending quote' : formatCurrency(deliveryFee)}</strong></Box>
             <Box><span>Store Handling Charges</span><strong>{formatCurrency(handlingFee)}</strong></Box>
             <Box><span>Discount</span><strong>-{formatCurrency(discount)}</strong></Box>
-            <Box className="checkout-summary-total"><span>Total Amount</span><strong>{formatCurrency(total)}</strong></Box>
+            <Box className="checkout-summary-total"><span>{deliveryFeePending ? 'Known total (delivery pending)' : 'Total Amount'}</span><strong>{formatCurrency(total)}</strong></Box>
           </Box>
           <Box className="checkout-secure-note"><CheckCircleOutlineOutlinedIcon /><Box><strong>Secure Checkout</strong><small>Your payment information is encrypted and secure.</small></Box></Box>
           {error && <Typography className="checkout-summary-error" role="alert">{error}</Typography>}
@@ -636,8 +699,8 @@ const CheckoutPage = () => {
       <DialogTitle>Delivery instructions</DialogTitle>
       <DialogContent className="checkout-instructions-dialog">
         <TextField label="Instructions for delivery partner" placeholder="For example: call on arrival or leave at the front door" multiline minRows={3} value={deliveryInstructions} onChange={(event) => setDeliveryInstructions(event.target.value)} />
-        <Button component="label" variant="outlined">Add photos<input hidden type="file" accept="image/*" multiple onChange={(event) => setDeliveryPhotos(Array.from(event.target.files || []))} /></Button>
-        {deliveryPhotos.length > 0 && <Typography>{deliveryPhotos.length} photo{deliveryPhotos.length === 1 ? '' : 's'} selected</Typography>}
+        <Box sx={{ display: 'flex', gap: 1, alignItems: 'flex-start' }}><TextField fullWidth size="small" label="Image URL" placeholder="Paste an image or Google Drive URL" value={deliveryPhotoUrl} onChange={(event) => setDeliveryPhotoUrl(event.target.value)} /><Button variant="outlined" onClick={() => { const url = normalizeImageUrl(deliveryPhotoUrl); if (!url || !isValidImageUrl(url)) return setError('Enter a valid delivery image URL.'); if (!deliveryPhotoUrls.includes(url)) setDeliveryPhotoUrls((current) => [...current, url]); setDeliveryPhotoUrl(''); setError(''); }}>Add</Button></Box>
+        {deliveryPhotoUrls.map((url, index) => <Box key={url} sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 1 }}><Box component="img" src={url} alt={`Delivery attachment ${index + 1}`} sx={{ width: 52, height: 52, objectFit: 'cover', borderRadius: 1 }} /><Typography sx={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis' }}>{url}</Typography><Button size="small" onClick={() => setDeliveryPhotoUrls((current) => current.filter((item) => item !== url))}>Remove</Button></Box>)}
       </DialogContent>
       <DialogActions><Button onClick={() => setDeliveryInstructionsOpen(false)}>Cancel</Button><Button variant="contained" onClick={() => setDeliveryInstructionsOpen(false)}>Save</Button></DialogActions>
     </Dialog>

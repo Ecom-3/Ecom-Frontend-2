@@ -5,13 +5,13 @@ import { createServiceProxy } from './src/config/serviceRoutes.js';
 
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, '', '');
-  const BACKEND_URL = (env.VITE_API_BASE_URL || 'http://localhost:8082').replace(/\/+$/, '');
+  const BACKEND_URL = (env.VITE_API_BASE_URL || 'http://localhost:58082').replace(/\/+$/, '');
   return {
   plugins: [react()],
 
   server: {
     host: '0.0.0.0',
-    port: 5175,
+    port: 55173,
     strictPort: true,
 
     proxy: createServiceProxy(BACKEND_URL),

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { deliveryProducts, isGlobalProduct, isProductEligibleForStore } from './storeDelivery.js';
+import { deliveryProducts, isGlobalProduct, isProductEligibleForStore, withGlobalStoreFallback } from './storeDelivery.js';
 import { balancedStoreProductPreview } from './storeProductListings.js';
 
 test('preview includes nearby stores and global offers without changing prices', () => {
@@ -18,6 +18,13 @@ test('global API flag retains India-wide offer beside a local offer', () => {
   const rows = deliveryProducts([product], mappings, stores, { latitude: 17, longitude: 78 });
   assert.deepEqual(rows.map((row) => row.storeId), ['local', 'global-store']);
   assert.equal(rows[1].price, 100);
+});
+
+test('store directory supplies the nationwide fallback when no global store record exists', () => {
+  const stores = withGlobalStoreFallback([{ id: 'local', name: 'Local', active: true }]);
+  assert.deepEqual(stores.map((store) => store.id), ['local', 'global-store']);
+  assert.equal(withGlobalStoreFallback([])[0].id, 'global-store');
+  assert.equal(withGlobalStoreFallback(stores).length, 2);
 });
 
 test('local offers wait for a resolved customer location while global offers remain nationwide', () => {

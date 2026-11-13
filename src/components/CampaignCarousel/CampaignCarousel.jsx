@@ -17,13 +17,20 @@ const CampaignCarousel=({banners,gesture=0})=>{
   const safeIndex=((index+gesture)%count+count)%count;
   const banner=banners[safeIndex];
   const configuredTarget=String(banner.targetUrl||'').trim();
-  const target=(!configuredTarget||configuredTarget==='/home'||configuredTarget.startsWith('/search'))
-    ? `/banners/${encodeURIComponent(banner.id)}`
-    : configuredTarget;
-  const external=/^https?:\/\//i.test(target);
-  const destination=target.startsWith('/')&&!target.startsWith('//')||external?target:'/search';
+  const destination=(()=>{
+    if(!configuredTarget) return '';
+    if(/^\/(?!\/)/.test(configuredTarget)) return configuredTarget;
+    try {
+      const url=new URL(configuredTarget);
+      if(!['http:','https:'].includes(url.protocol)) return '';
+      const host=url.hostname.toLowerCase();
+      if(host==='localhost'||host.endsWith('.localhost')||host==='::1'||host==='0.0.0.0'||/^127\./.test(host)) return '';
+      return url.toString();
+    } catch { return ''; }
+  })();
+  const external=/^https?:\/\//i.test(destination);
   const move=(step)=>setIndex((value)=>(value+step+count)%count);
-return <Box sx={{position:'relative',mx:'4vw',my:2,borderRadius:3,overflow:'hidden',bgcolor:'#e8f3ee',minHeight:{xs:170,md:280}}}><Box component={external?'a':Link} {...(external?{href:destination}:{to:destination})} aria-label={`Browse ${banner.name}`} sx={{display:'block',color:'inherit',textDecoration:'none',cursor:'pointer','&:focus-visible':{outline:'3px solid #007c58',outlineOffset:-3}}}><SafeProductImage src={banner.mobileImage||banner.image} alt={banner.name} style={{width:'100%',height:'clamp(170px,25vw,320px)',objectFit:'cover',display:'block'}}/><Box sx={{position:'absolute',inset:'auto 0 0',p:{xs:2,md:3},color:'white',background:'linear-gradient(transparent,rgba(0,0,0,.72))'}}><Typography variant="h5" fontWeight={800}>{banner.name}</Typography><Typography>{banner.description}</Typography></Box></Box>{count>1&&<><IconButton aria-label="Previous banner" onClick={()=>move(-1)} sx={{position:'absolute',left:12,top:'45%',bgcolor:'rgba(255,255,255,.9)'}}><ChevronLeftIcon/></IconButton><IconButton aria-label="Next banner" onClick={()=>move(1)} sx={{position:'absolute',right:12,top:'45%',bgcolor:'rgba(255,255,255,.9)'}}><ChevronRightIcon/></IconButton><Box sx={{position:'absolute',bottom:8,left:'50%',transform:'translateX(-50%)',display:'flex',gap:.75}}>{banners.map((item,dot)=><Box component="button" aria-label={`Show ${item.name}`} key={item.id} onClick={()=>setIndex(dot)} sx={{width:dot===index?22:8,height:8,p:0,border:0,borderRadius:4,bgcolor:dot===index?'white':'rgba(255,255,255,.55)',cursor:'pointer'}}/>)}</Box></>}</Box>;
+return <Box className="home-campaign-carousel" sx={{position:'relative',mx:'4vw',my:1.25,borderRadius:2.5,overflow:'hidden',bgcolor:'#e8f3ee',minHeight:{xs:145,md:175}}}><Box component={destination?(external?'a':Link):'div'} {...(destination?(external?{href:destination,rel:'noopener noreferrer'}:{to:destination}):{})} aria-label={destination?`Browse ${banner.name}`:undefined} sx={{display:'block',color:'inherit',textDecoration:'none',cursor:destination?'pointer':'default','&:focus-visible':{outline:'3px solid #007c58',outlineOffset:-3}}}><SafeProductImage src={banner.mobileImage||banner.image} alt={banner.name} style={{width:'100%',height:'clamp(145px,15vw,190px)',objectFit:'cover',display:'block'}}/><Box sx={{position:'absolute',inset:'auto 0 0',p:{xs:1.5,md:2},color:'white',background:'linear-gradient(transparent,rgba(0,0,0,.72))'}}><Typography variant="h5" fontWeight={800} sx={{fontSize:{xs:16,md:18}}}>{banner.name}</Typography><Typography sx={{fontSize:{xs:10,md:11}}}>{banner.description}</Typography></Box></Box>{count>1&&<><IconButton aria-label="Previous banner" onClick={()=>move(-1)} sx={{position:'absolute',left:12,top:'45%',bgcolor:'rgba(255,255,255,.9)'}}><ChevronLeftIcon/></IconButton><IconButton aria-label="Next banner" onClick={()=>move(1)} sx={{position:'absolute',right:12,top:'45%',bgcolor:'rgba(255,255,255,.9)'}}><ChevronRightIcon/></IconButton><Box sx={{position:'absolute',bottom:8,left:'50%',transform:'translateX(-50%)',display:'flex',gap:.75}}>{banners.map((item,dot)=><Box component="button" aria-label={`Show ${item.name}`} key={item.id} onClick={()=>setIndex(dot)} sx={{width:dot===index?22:8,height:8,p:0,border:0,borderRadius:4,bgcolor:dot===index?'white':'rgba(255,255,255,.55)',cursor:'pointer'}}/>)}</Box></>}</Box>;
 };
 const ScrollableCampaignCarousel = (props) => {
   const start = useRef(null);

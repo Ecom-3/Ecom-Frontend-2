@@ -15,3 +15,13 @@ test('admin location lookup includes API locations and store locations without d
 test('admin location lookup tolerates missing or malformed lists', () => {
   assert.deepEqual(adminLocationLookupOptions(null, [{ location: 'Hyderabad' }]), ['Hyderabad']);
 });
+
+test('admin location lookup accepts strings and common API location fields', () => {
+  assert.deepEqual(
+    adminLocationLookupOptions(
+      ['Delhi', { locationName: ' Bengaluru ' }, { name: 'Kochi' }],
+      [{ city: 'Delhi' }, { locationName: 'Mumbai' }],
+    ),
+    ['Bengaluru', 'Delhi', 'Kochi', 'Mumbai'],
+  );
+});

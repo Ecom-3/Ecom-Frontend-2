@@ -2,7 +2,7 @@ export { totalDeliveryCharge } from '../utils/deliveryCharges.js';
 import { getCachedStoreDeliveryQuote, getStoreDeliveryQuote, getStores } from './catalogApi';
 import { resolveProductStore } from './productStoreResolver';
 import { pickupDeliveryLine, storeFulfillmentMethod } from '../utils/storeFulfillment.js';
-import { deliveryMethodId, deliverySlotLabel, isGlobalProduct, isGlobalStore, preferredDeliveryMethod, sortDeliveryMethods } from '../utils/storeDelivery';
+import { deliveryMethodId, deliverySlotLabel, isGlobalProduct, isGlobalStore, preferredDeliveryMethod, sortDeliveryMethods, withGlobalStoreFallback } from '../utils/storeDelivery';
 
 const lineKey = (item = {}) => `${item.storeId || item.sourceStoreId || item.store || item.storeName || 'store'}:${item.productId || item.id || ''}:${item.variantId ?? 'product'}`;
 
@@ -50,7 +50,7 @@ const globalLine = (item, source = {}, quote = null) => ({
 
 const localLine = (item, source, quote, method) => {
   const selected = sortDeliveryMethods(quote?.methods || []).find((entry) => entry.enabled !== false && deliveryMethodId(entry.deliveryType) === deliveryMethodId(method)) || {};
-  const charge = Number(quote?.deliveryCharge ?? selected.deliveryCharge ?? 0);
+  const charge = Number(selected.deliveryCharge ?? quote?.deliveryCharge ?? 0);
   const eta = selected.estimatedTime || (quote?.estimatedDeliveryMin && quote?.estimatedDeliveryMax ? `${quote.estimatedDeliveryMin}-${quote.estimatedDeliveryMax} min` : '');
   return {
     key: lineKey(item),
@@ -77,13 +77,16 @@ export const buildCartDeliveryLines = async ({ cartItems = [], catalogProducts =
   // Catalog APIs can include null placeholders when one store was removed or
   // partially migrated. Ignore those rows before any store.id lookup so a
   // malformed directory entry cannot break the entire cart summary.
-  const stores = (Array.isArray(response) ? response : response?.content || response?.items || [])
+  const storeRows = (Array.isArray(response) ? response : response?.content || response?.items || [])
     .filter((store) => store && typeof store === 'object');
   const products = (Array.isArray(catalogProducts) ? catalogProducts : [])
     .filter((product) => product && typeof product === 'object');
   const items = (Array.isArray(cartItems) ? cartItems : [])
     .filter((item) => item && typeof item === 'object');
-  if (!stores.length) throw new Error('Store details are unavailable. Please retry.');
+  const stores = withGlobalStoreFallback(storeRows);
+  if (!storeRows.length && items.some((item) => !isGlobalCartOffer(item, resolveProductStore(item, products) || {}, products.find((product) => matchesProduct(item, product)), null))) {
+    throw new Error('Store details are unavailable. Please retry.');
+  }
   if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
     return items.map((item) => {
       const source = resolveProductStore(item, products) || {};

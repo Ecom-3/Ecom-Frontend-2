@@ -28,9 +28,17 @@ export const useFulfillmentTracking = (orderId, order) => {
         setTrackingEvents([]);
       }
       setErrors({});
-      if (!orderId) { setLoading({}); return; }
+      if (!orderId || !order) { setLoading({}); return; }
       const globalPending = isGlobalOrder(order) && String(order?.globalApproval || 'pending').toLowerCase() === 'pending' && !order?.fulfillment && !order?.shipment;
       if (globalPending) {
+        setFulfillment(null);
+        setShipment(null);
+        setTrackingEvents([]);
+        setLoading({ fulfillment: false, shipment: false, tracking: false });
+        setErrors({});
+        return;
+      }
+      if (order?.status === 'CREATED' && !order?.fulfillment && !order?.shipment && !order?.trackingEvents?.length) {
         setFulfillment(null);
         setShipment(null);
         setTrackingEvents([]);

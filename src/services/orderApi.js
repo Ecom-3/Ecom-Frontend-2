@@ -89,6 +89,7 @@ export const normalizeOrderItem = (item = {}) => ({
 });
 
 export const isGlobalOrder = (order = {}) => {
+  if (!order) return false;
   const type = String(order.fulfillmentType || order.deliveryMethod || '').toLowerCase();
   const channel = String(order.channel || '').toLowerCase();
   const approval = String(order.globalApproval || '').toLowerCase();
@@ -158,23 +159,38 @@ export const buildOrderItemsPayload = (cartItems = []) =>
 const parseAddressText = (text = '') => {
   const raw = String(text || '').trim();
   const parts = raw.split(',').map((part) => part.trim()).filter(Boolean);
-  const postalMatch = raw.match(/\b\d{5,6}\b/);
-  const state = parts.find((part) => part.toLowerCase().includes('telangana')) || '';
-  const city = parts.find((part) => part.toLowerCase().includes('hyderabad')) || '';
+  const seen = new Set();
+  const uniqueParts = parts.filter((part) => {
+    const key = part.toLocaleLowerCase();
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+  const postalMatch = uniqueParts.join(', ').match(/\b\d{5,6}\b/);
+  const state = uniqueParts.find((part) => /\b(telangana|andhra pradesh|karnataka|tamil nadu|maharashtra|kerala|delhi)\b/i.test(part)) || '';
+  const city = uniqueParts.find((part) => /\b(hyderabad|secunderabad|bangalore|bengaluru|chennai|mumbai|pune|vijayawada|visakhapatnam)\b/i.test(part)) || '';
+  const withoutCountry = uniqueParts.filter((part) => !/^india$/i.test(part));
+  const addressLines = withoutCountry.filter((part) => !/^\d{5,6}$/.test(part) && part.toLocaleLowerCase() !== city.toLocaleLowerCase() && part.toLocaleLowerCase() !== state.toLocaleLowerCase());
   return {
-    addressLine1: parts.slice(0, 4).join(', ') || raw || 'Customer address',
+    addressLine1: addressLines.join(', ') || raw || 'Customer address',
     city,
     state,
-    country: parts.find((part) => part.toLowerCase() === 'india') || 'India',
+    country: 'India',
     postalCode: postalMatch?.[0] || '',
   };
 };
 
 export const buildAddressPayload = (address = {}, fallbackText = '', customer = {}) => {
-  const parsed = parseAddressText(address.address || fallbackText);
+  const selectedAddressText = String(address.id === 'selected-location' ? (address.address || fallbackText || '') : (address.addressLine1 || address.address || address.street || fallbackText || '')).trim();
+  const parsed = parseAddressText(selectedAddressText);
+  const manual = address.manualLocation || {};
+  const line1 = [address.houseNumber, manual.street, manual.village, address.landmark]
+    .map((part) => String(part || '').trim()).filter(Boolean).filter((part, index, all) => all.findIndex((candidate) => candidate.toLocaleLowerCase() === part.toLocaleLowerCase()) === index).join(', ');
+  const line2 = [address.floor ? `Floor ${address.floor}` : '', address.landmark].filter(Boolean).join(', ');
   return {
-    addressLine1: address.addressLine1 || address.street || address.manualLocation?.street || parsed.addressLine1,
-    addressLine2: address.addressLine2 || [address.houseNumber, address.floor, address.landmark].filter(Boolean).join(', ') || null,
+    sourceAddressId: address.sourceAddressId || address.selectedAddressId || (address.id && address.id !== 'selected-location' && !address.fromOrder ? String(address.id) : null),
+    addressLine1: address.addressLine1 || address.street || line1 || parsed.addressLine1,
+    addressLine2: address.addressLine2 || line2 || null,
     city: address.city || address.manualLocation?.city || parsed.city || 'Hyderabad',
     state: address.state || address.manualLocation?.state || parsed.state || 'Telangana',
     country: address.country || parsed.country || 'India',

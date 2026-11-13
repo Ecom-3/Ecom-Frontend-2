@@ -8,17 +8,19 @@ import { customerProfileService } from '../services/customerProfileService';
 import { getCustomerOrders, normalizeOrder, orderDeliveryAddress } from '../services/orderApi';
 import { getProducts, getCategories, getCategoryProducts, getPublicStoreProducts, getStoreProducts, getStores, getBanners } from '../services/catalogApi';
 import { adaptProductList, adaptCategoryList, adaptStoreProductList, adaptBannerList } from '../services/catalogAdapter';
-import { addCartItem, calculateCartTotal, clearCartItems, createCart, getActiveCart, getActiveCarts, getCart, moveSavedCartItemToCart, removeCartItem, saveCartItemForLater, updateCartItem } from '../services/cartApi';
+import { addCartItem, calculateCartTotal, clearCartItems, createCart, getActiveCart, getActiveCarts, getCart, moveSavedCartItemToCart, removeCartItem, removeSavedCartItemForLater, saveCartItemForLater, updateCartItem } from '../services/cartApi';
 import { rememberProductStore, resolveProductStore } from '../services/productStoreResolver';
 import { cleanDisplayText } from '../utils/textEncoding';
 import { getPublicInventoryAvailability } from '../services/inventoryApi';
 import { migrateGuestCart } from '../utils/migrateGuestCart.js';
 import { loadCustomerCart } from '../utils/loadCustomerCart.js';
 import { planCartLineMutation, sameCartLine } from '../utils/cartLineMutation.js';
+import { mergeCartItems, replaceSavedItemsForCart } from '../utils/cartState.js';
 import { logCartDiagnostic, logCartSnapshot } from '../utils/cartDiagnostics.js';
 import { validateCheckoutAvailability } from '../utils/checkoutAvailability';
 import { isCustomerSession, resolveCustomerId } from '../utils/customerSession.js';
 import { readGuestList, writeGuestList } from '../utils/guestCommerceStorage.js';
+import { addressFieldsFromSavedStreet } from '../utils/addressPrefill';
 
 // eslint-disable-next-line react-refresh/only-export-components
 export const AppContext = createContext();
@@ -178,14 +180,8 @@ export const AppProvider = ({ children }) => {
     const storeId = cart?.storeId || incoming.find((item) => item.storeId)?.storeId || '';
     const cartId = cart?.id || '';
     setActiveCart(cart || null);
-    if (cartId) setSavedForLater((items) => [...items.filter((item) => item.cartId !== cartId), ...savedItemsFromResponse(cart)]);
-    setCartItems((current) => [
-      ...current.filter((item) => {
-        if (cartId && item.cartId) return item.cartId !== cartId;
-        return storeId ? String(item.storeId || '') !== String(storeId) : true;
-      }),
-      ...incoming,
-    ]);
+    if (cartId) setSavedForLater((items) => replaceSavedItemsForCart(items, savedItemsFromResponse(cart), cartId));
+    setCartItems((current) => mergeCartItems(current, incoming, { cartId, storeId }));
     setCartUnavailable(false);
     setCartError('');
     return cart;
@@ -226,7 +222,7 @@ export const AppProvider = ({ children }) => {
     const identity = resolveProductIdentity(product);
     if (!identity.productId) return null;
     const variant = product.variant || product.selectedVariant || product.variants?.find((item) => (item.variantId || item.id) === identity.variantId) || product.variants?.[0] || {};
-    const source = rememberProductStore(product) || resolveProductStore(product, catalogProducts) || {};
+    const source = rememberProductStore(product) || {};
     return {
       ...source,
       ...product,
@@ -246,11 +242,14 @@ export const AppProvider = ({ children }) => {
   };
 
   const resolveCartStoreId = (product) => {
-    if (product?.storeId) return product.storeId;
-    const selectedStore = selectedStoreId;
-    const stores = catalogStores;
-    const match = stores.find((store) => store.id === selectedStore || store.name === selectedStore);
-    return match?.id || stores.find((store) => store.status !== 'Inactive' && store.active !== false)?.id || null;
+    const explicitStoreId = product?.storeId || product?.sourceStoreId;
+    if (explicitStoreId) return explicitStoreId;
+    if (product?.fulfillmentType === 'global' || product?.globalProduct === true || product?.deliveryMethod === 'global') return 'global-store';
+    const productId = String(product?.productId || product?.id || '');
+    const selectedStore = catalogStores.find((store) => store.id === selectedStoreId || store.name === selectedStoreId);
+    const hasSelectedStoreMapping = selectedStore && catalogStoreProducts.some((mapping) => String(mapping.productId) === productId
+      && String(mapping.storeId) === String(selectedStore.id) && mapping.available !== false && String(mapping.status || 'ACTIVE').toUpperCase() !== 'INACTIVE');
+    return hasSelectedStoreMapping ? selectedStore.id : null;
   };
 
   const cartScopeFor = (product) => ({
@@ -293,7 +292,6 @@ export const AppProvider = ({ children }) => {
       .then(([products, response]) => {
         const byId = new Map(products.map((product) => [product.productId, product]));
         const storeProducts = adaptStoreProductList(response || [])
-          .filter((item) => item.available !== false)
           .map((item) => ({ ...item, product: item.product || byId.get(item.productId) || null }));
         setCatalogStoreProducts(storeProducts);
       })
@@ -387,7 +385,7 @@ export const AppProvider = ({ children }) => {
     const token = sessionStorage.getItem('authToken');
     if (!isLoggedIn || !isCustomerSession({ role: user?.role, tokenCustomerId: tokenCustomerId() }) || !token || token.startsWith('local-')) return;
     customerProfileService.addresses().then((items) => {
-      const mapped = items.map((item) => ({ ...item, isDefault: item.defaultAddress, coordinates: item.latitude != null && item.longitude != null ? { lat:item.latitude, lng:item.longitude } : null, manualLocation: item.street ? { street:item.street, city:item.city || '', state:item.state || '', pincode:item.pincode || '' } : null }));
+      const mapped = items.map((item) => ({ ...item, isDefault: item.defaultAddress, coordinates: item.latitude != null && item.longitude != null ? { lat:item.latitude, lng:item.longitude } : null, manualLocation: item.street ? { ...addressFieldsFromSavedStreet(item.street), city:item.city || '', state:item.state || '', pincode:item.pincode || '' } : null }));
       setAddresses(mapped);
     }).catch((error) => console.warn('Could not load addresses:', error.message));
   }, [isLoggedIn, user?.role]);
@@ -790,6 +788,9 @@ export const AppProvider = ({ children }) => {
     // A successfully claimed checkout cart is immutable on the server. Clear
     // the local cart view after order creation without sending DELETE against
     // that CHECKED_OUT cart.
+    // Invalidate any cart hydration that started before order confirmation so
+    // its late response cannot repopulate the completed cart in this tab.
+    cartHydrationRequest.current += 1;
     guestCartItemsRef.current = [];
     writeGuestList('cart', []);
     setCartItems([]);
@@ -816,7 +817,7 @@ export const AppProvider = ({ children }) => {
     if (!itemPayload?.productId) return;
     if (isLoggedIn && itemPayload.cartId && itemPayload.id && itemPayload.id !== GUEST_CART_ID) {
       try {
-        applyCartResponse(await saveCartItemForLater(itemPayload.cartId, itemPayload.id));
+        mergeCartResponse(await saveCartItemForLater(itemPayload.cartId, itemPayload.id));
         return true;
       } catch (error) {
         setCartError(error.message || 'Could not save this item for later.');
@@ -837,9 +838,9 @@ export const AppProvider = ({ children }) => {
     if (!itemPayload?.productId) return;
     if (isLoggedIn && itemPayload.cartId && itemPayload.id && itemPayload.id !== GUEST_CART_ID) {
       try {
-        const cart = await removeCartItem(itemPayload.cartId, itemPayload.id);
-        setSavedForLater((items) => items.filter((item) => !sameCatalogItem(item, itemPayload)));
-        setActiveCart(cart);
+        // The cart API's DELETE route addresses active cart lines only. A saved
+        // item has its own state; remove it with the saved-for-later operation.
+        mergeCartResponse(await removeSavedCartItemForLater(itemPayload.cartId, itemPayload.id));
         return true;
       } catch (error) {
         setCartError(error.message || 'Could not remove this saved item.');
@@ -856,7 +857,7 @@ export const AppProvider = ({ children }) => {
     const quantity = Math.max(1, Number(itemPayload.quantity || 1));
     if (isLoggedIn && itemPayload.cartId && itemPayload.id && itemPayload.id !== GUEST_CART_ID) {
       try {
-        applyCartResponse(await moveSavedCartItemToCart(itemPayload.cartId, itemPayload.id));
+        mergeCartResponse(await moveSavedCartItemToCart(itemPayload.cartId, itemPayload.id));
         return true;
       } catch (error) {
         setCartError(error.message || 'Could not move item back to cart.');
@@ -913,14 +914,14 @@ export const AppProvider = ({ children }) => {
     const duplicate = addresses.find((item) => cleanLocationText(item.address).toLowerCase() === cleanLocationText(address.address).toLowerCase());
     if (duplicate) throw new Error('This address is already saved. Choose it from your saved addresses or edit it.');
     const saved = await customerProfileService.createAddress(address);
-    const next = { ...saved, isDefault:Boolean(saved.defaultAddress ?? address.isDefault), coordinates:saved.latitude != null ? {lat:saved.latitude,lng:saved.longitude}:null, manualLocation:saved.street?{street:saved.street,city:saved.city||'',state:saved.state||'',pincode:saved.pincode||''}:null };
+    const next = { ...saved, isDefault:Boolean(saved.defaultAddress ?? address.isDefault), coordinates:saved.latitude != null ? {lat:saved.latitude,lng:saved.longitude}:null, manualLocation:saved.street?{...addressFieldsFromSavedStreet(saved.street),city:saved.city||'',state:saved.state||'',pincode:saved.pincode||''}:null };
     setAddresses((items) => [...items.map((item)=>({...item,isDefault:next.isDefault ? false : item.isDefault})),next]);
     setDeliveryAddress(next.address);
     return next;
   };
   const deleteAddress = async (id) => { await customerProfileService.deleteAddress(id); const remaining=addresses.filter((item)=>item.id!==id); if(remaining.length&&!remaining.some((item)=>item.isDefault))remaining[0]={...remaining[0],isDefault:true}; setAddresses(remaining); setDeliveryAddress((remaining.find((item)=>item.isDefault)||remaining[0])?.address||''); };
   const setDefaultAddress = async (id) => { const saved=await customerProfileService.setDefaultAddress(id); setAddresses((items)=>items.map((item)=>({...item,isDefault:item.id===id}))); setDeliveryAddress(saved.address); };
-  const updateAddress = async (id,address) => { const saved=await customerProfileService.updateAddress(id,{...address,isDefault:addresses.find((item)=>item.id===id)?.isDefault}); const next={...saved,isDefault:saved.defaultAddress,coordinates:saved.latitude!=null?{lat:saved.latitude,lng:saved.longitude}:null,manualLocation:saved.street?{street:saved.street,city:saved.city||'',state:saved.state||'',pincode:saved.pincode||''}:null}; setAddresses((items)=>items.map((item)=>item.id===id?next:item)); if(next.isDefault)setDeliveryAddress(next.address); return next; };
+  const updateAddress = async (id,address) => { const saved=await customerProfileService.updateAddress(id,{...address,isDefault:addresses.find((item)=>item.id===id)?.isDefault}); const next={...saved,isDefault:saved.defaultAddress,coordinates:saved.latitude!=null?{lat:saved.latitude,lng:saved.longitude}:null,manualLocation:saved.street?{...addressFieldsFromSavedStreet(saved.street),city:saved.city||'',state:saved.state||'',pincode:saved.pincode||''}:null}; setAddresses((items)=>items.map((item)=>item.id===id?next:item)); if(next.isDefault)setDeliveryAddress(next.address); return next; };
 
   const [locale, setLocale] = useState(() => ({ language:readLanguage(), currency:'INR', timeZone:Intl.DateTimeFormat().resolvedOptions().timeZone }));
   const updateLocale = (next) => {

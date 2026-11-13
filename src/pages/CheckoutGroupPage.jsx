@@ -12,7 +12,7 @@ const COMPLETED_CHECKOUT_RETURN_KEY = 'freshcart.completedCheckoutReturnToCart';
 export default function CheckoutGroupPage() {
   const { groupId } = useParams();
   const navigate = useNavigate();
-  const { formatCurrency, user } = useContext(AppContext);
+  const { formatCurrency, user, clearCartAfterCheckout } = useContext(AppContext);
   const [group, setGroup] = useState(null);
   const [error, setError] = useState('');
   const [retry, setRetry] = useState(0);
@@ -20,6 +20,7 @@ export default function CheckoutGroupPage() {
   const [recovering, setRecovering] = useState(false);
   const recoveryBusy = useRef(false);
   const resumedGroup = useRef(null);
+  const clearedCompletedGroup = useRef('');
   const reviewCart = async () => {
     if (recoveryBusy.current) return;
     recoveryBusy.current = true;
@@ -75,8 +76,11 @@ export default function CheckoutGroupPage() {
     return () => { active = false; clearTimeout(timer); };
   }, [groupId, user?.id, retry]);
   useEffect(() => {
-    if (group?.state === 'COMPLETED') sessionStorage.setItem(COMPLETED_CHECKOUT_RETURN_KEY, group.id);
-  }, [group?.id, group?.state]);
+    if (group?.state !== 'COMPLETED' || !group.id || clearedCompletedGroup.current === group.id) return;
+    sessionStorage.setItem(COMPLETED_CHECKOUT_RETURN_KEY, group.id);
+    clearedCompletedGroup.current = group.id;
+    clearCartAfterCheckout();
+  }, [group?.id, group?.state, clearCartAfterCheckout]);
   return <Box component="main" sx={{ width: '100%', boxSizing: 'border-box', minHeight: '100vh', border: '2px solid #087454', borderTopWidth: 6, bgcolor: '#f3f7f5', px: { xs: 2, md: 5 }, py: 2, color: '#173b2e' }}>
     <Box sx={{ width: '100%', mx: 'auto' }}>
     <Button startIcon={<ArrowBackIcon />} sx={{ color: '#087454', textTransform: 'none' }} onClick={() => navigate('/orders')}>Orders</Button>

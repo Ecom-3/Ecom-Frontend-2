@@ -87,4 +87,6 @@ export const saveCartItemForLater = async (cartId, itemId) => request(`/api/v1/c
 
 export const moveSavedCartItemToCart = async (cartId, itemId) => request(`/api/v1/carts/${encodeURIComponent(cartId)}/items/${encodeURIComponent(itemId)}/move-to-cart`, { method: 'PATCH' });
 
+export const removeSavedCartItemForLater = async (cartId, itemId) => request(`/api/v1/carts/${encodeURIComponent(cartId)}/items/${encodeURIComponent(itemId)}/saved-for-later`, { method: 'DELETE' });
+
 export const calculateCartTotal = async (cartId) => request(`/api/v1/carts/${encodeURIComponent(cartId)}/calculate-total`, { method: 'POST' });
