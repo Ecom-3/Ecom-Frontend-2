@@ -6,7 +6,7 @@
 .admin-sidebar{width:230px;flex-basis:230px;padding:12px 10px}.admin-workspace{max-width:calc(100% - 230px);padding:0 22px 34px!important}.admin-topbar{height:58px;margin:0 -22px 18px;padding:0 22px}.admin-brand{grid-template-columns:42px 1fr 30px;gap:8px;padding-bottom:10px}.admin-brand img{width:42px;height:42px}.admin-brand h6{font-size:15px}.admin-nav-scroll{padding-top:6px}.admin-nav-group>p{margin:10px 9px 4px;font-size:8px}.admin-sidebar .MuiButton-root{min-height:34px;padding:6px 9px;font-size:11px}.admin-sidebar .MuiButton-startIcon svg{font-size:17px}.admin-page-heading{gap:14px;margin-bottom:16px}.admin-page-heading h4{font-size:23px}.admin-page-heading p{font-size:12px}.admin-stat-grid{gap:10px}.admin-stat-card{min-height:106px;padding:13px}.admin-stat-card h5{font-size:20px}.admin-stat-card>p{font-size:11px}.admin-stat-icon{width:32px;height:32px;right:12px;top:12px}.admin-insight-grid,.admin-dashboard-grid{gap:12px;margin-top:14px}.admin-widget{min-height:200px;padding:15px}.admin-widget-head{margin-bottom:11px}.admin-widget-head h6{font-size:14px}.admin-order-row,.stock-row{min-height:46px;padding:6px 0;gap:7px}.admin-topbar-title{font-size:12px}.admin-global-search{width:220px;height:34px}.admin-profile-button .MuiAvatar-root{width:29px;height:29px}.admin-main .MuiButton-root{font-size:12px}.admin-products-table th{font-size:9px!important;padding:7px!important}.admin-products-table td{font-size:9px!important;padding:5px!important}.admin-products-table td .MuiChip-root{height:19px;font-size:8px}.admin-products-table td .MuiIconButton-root{padding:4px}@media(max-width:760px){.admin-workspace{max-width:100%;padding:0 12px 28px!important}.admin-topbar{margin:0 -12px 14px;padding:0 12px}.admin-page-heading h4{font-size:21px}.admin-stat-card{min-height:96px;padding:11px}}
 
 .admin-workspace:has(.admin-products-hero)>.admin-page-heading{display:none}.admin-products-hero{box-shadow:0 4px 18px rgba(12,66,48,.04)}
-.admin-workspace:has(.admin-categories-hero)>.admin-page-heading{display:none}.admin-categories-table th:nth-of-type(1),.admin-categories-table td:nth-of-type(1){width:4%}.admin-categories-table th:nth-of-type(2),.admin-categories-table td:nth-of-type(2){width:26%}.admin-categories-table th:nth-of-type(3),.admin-categories-table td:nth-of-type(3){width:54%}.admin-categories-table th:nth-of-type(4),.admin-categories-table td:nth-of-type(4){width:16%}.admin-categories-table td{overflow:hidden}
+.admin-workspace:has(.admin-categories-hero)>.admin-page-heading{display:none}.admin-categories-table th:nth-of-type(1),.admin-categories-table td:nth-of-type(1){width:34%}.admin-categories-table th:nth-of-type(2),.admin-categories-table td:nth-of-type(2){width:50%}.admin-categories-table th:nth-of-type(3),.admin-categories-table td:nth-of-type(3){width:16%}.admin-categories-table td{overflow-wrap:anywhere}
 
 .admin-products-table th:nth-of-type(1),.admin-products-table td:nth-of-type(1){width:35%}.admin-products-table th:nth-of-type(2),.admin-products-table td:nth-of-type(2){width:11%}.admin-products-table th:nth-of-type(3),.admin-products-table td:nth-of-type(3){width:14%}.admin-products-table th:nth-of-type(4),.admin-products-table td:nth-of-type(4){width:8%}.admin-products-table th:nth-of-type(5),.admin-products-table td:nth-of-type(5){width:11%}.admin-products-table th:nth-of-type(6),.admin-products-table td:nth-of-type(6){width:7%}.admin-products-table th:nth-of-type(7),.admin-products-table td:nth-of-type(7){width:7%}.admin-products-table th:nth-of-type(8),.admin-products-table td:nth-of-type(8){width:7%}@media(max-width:1000px){.admin-products-table th:nth-of-type(2),.admin-products-table td:nth-of-type(2),.admin-products-table th:nth-of-type(6),.admin-products-table td:nth-of-type(6){display:none}.admin-products-table th:nth-of-type(1),.admin-products-table td:nth-of-type(1){width:43%}.admin-products-table th:nth-of-type(3),.admin-products-table td:nth-of-type(3){display:table-cell;width:18%}.admin-products-table th:nth-of-type(4),.admin-products-table td:nth-of-type(4){width:10%}.admin-products-table th:nth-of-type(5),.admin-products-table td:nth-of-type(5){width:12%}.admin-products-table th:nth-of-type(7),.admin-products-table td:nth-of-type(7){display:table-cell;width:9%}.admin-products-table th:nth-of-type(8),.admin-products-table td:nth-of-type(8){width:8%}}@media(max-width:620px){.admin-products-table th:nth-of-type(2),.admin-products-table td:nth-of-type(2),.admin-products-table th:nth-of-type(3),.admin-products-table td:nth-of-type(3),.admin-products-table th:nth-of-type(6),.admin-products-table td:nth-of-type(6){display:none}.admin-products-table th:nth-of-type(1),.admin-products-table td:nth-of-type(1){width:48%}.admin-products-table th:nth-of-type(4),.admin-products-table td:nth-of-type(4){width:14%}.admin-products-table th:nth-of-type(5),.admin-products-table td:nth-of-type(5){width:17%}.admin-products-table th:nth-of-type(7),.admin-products-table td:nth-of-type(7){width:11%}.admin-products-table th:nth-of-type(8),.admin-products-table td:nth-of-type(8){width:10%}}
 
@@ -21,3 +21,114 @@
 .admin-main:has(.admin-orders-dashboard)>.admin-page-heading{display:none}.admin-main:has(.admin-orders-dashboard){padding-top:12px!important}.admin-orders-table th:nth-of-type(1),.admin-orders-table td:nth-of-type(1){width:3%}.admin-orders-table th:nth-of-type(2),.admin-orders-table td:nth-of-type(2){width:16%}.admin-orders-table th:nth-of-type(3),.admin-orders-table td:nth-of-type(3){width:17%}.admin-orders-table th:nth-of-type(4),.admin-orders-table td:nth-of-type(4){width:10%}.admin-orders-table th:nth-of-type(5),.admin-orders-table td:nth-of-type(5){width:14%}.admin-orders-table th:nth-of-type(6),.admin-orders-table td:nth-of-type(6){width:8%}.admin-orders-table th:nth-of-type(7),.admin-orders-table td:nth-of-type(7){width:11%}.admin-orders-table th:nth-of-type(8),.admin-orders-table td:nth-of-type(8){width:12%}.admin-orders-table th:nth-of-type(9),.admin-orders-table td:nth-of-type(9){width:9%}@media(max-width:900px){.admin-orders-table{min-width:760px!important}.admin-orders-table th:nth-of-type(4),.admin-orders-table td:nth-of-type(4){display:none}.admin-orders-table th:nth-of-type(2),.admin-orders-table td:nth-of-type(2){width:20%}.admin-orders-table th:nth-of-type(3),.admin-orders-table td:nth-of-type(3){width:20%}.admin-orders-table th:nth-of-type(5),.admin-orders-table td:nth-of-type(5){width:17%}}@media(max-width:620px){.admin-orders-dashboard>div:first-child{flex-wrap:wrap}.admin-orders-dashboard>div:first-child>div:nth-child(2){display:grid!important;grid-template-columns:repeat(2,minmax(0,1fr))!important;width:100%}.admin-orders-table{min-width:660px!important}.admin-orders-table th:nth-of-type(3),.admin-orders-table td:nth-of-type(3),.admin-orders-table th:nth-of-type(5),.admin-orders-table td:nth-of-type(5){display:none}.admin-orders-table th:nth-of-type(2),.admin-orders-table td:nth-of-type(2){width:26%}.admin-orders-table th:nth-of-type(6),.admin-orders-table td:nth-of-type(6){width:12%}.admin-orders-table th:nth-of-type(7),.admin-orders-table td:nth-of-type(7){width:16%}.admin-orders-table th:nth-of-type(8),.admin-orders-table td:nth-of-type(8){width:14%}.admin-orders-table th:nth-of-type(9),.admin-orders-table td:nth-of-type(9){width:10%}}
 
 .admin-orders-table{min-width:100%!important}@media(max-width:900px){.admin-orders-table th:nth-of-type(4),.admin-orders-table td:nth-of-type(4),.admin-orders-table th:nth-of-type(5),.admin-orders-table td:nth-of-type(5){display:none}.admin-orders-table th:nth-of-type(2),.admin-orders-table td:nth-of-type(2){width:21%}.admin-orders-table th:nth-of-type(3),.admin-orders-table td:nth-of-type(3){width:21%}.admin-orders-table th:nth-of-type(6),.admin-orders-table td:nth-of-type(6){width:10%}.admin-orders-table th:nth-of-type(7),.admin-orders-table td:nth-of-type(7){width:13%}.admin-orders-table th:nth-of-type(8),.admin-orders-table td:nth-of-type(8){width:15%}.admin-orders-table th:nth-of-type(9),.admin-orders-table td:nth-of-type(9){width:12%}}@media(max-width:620px){.admin-orders-table th:nth-of-type(3),.admin-orders-table td:nth-of-type(3){display:none}.admin-orders-table th:nth-of-type(2),.admin-orders-table td:nth-of-type(2){width:30%}.admin-orders-table th:nth-of-type(6),.admin-orders-table td:nth-of-type(6){width:17%}.admin-orders-table th:nth-of-type(7),.admin-orders-table td:nth-of-type(7){width:19%}.admin-orders-table th:nth-of-type(8),.admin-orders-table td:nth-of-type(8){width:20%}.admin-orders-table th:nth-of-type(9),.admin-orders-table td:nth-of-type(9){width:11%}}
+
+/* Keep the admin portal workspace constrained to the space beside its sidebar. */
+.admin-shell { width: 100%; min-width: 0; }
+.admin-sidebar { flex-shrink: 0; }
+.admin-workspace { width: 0; min-width: 0; max-width: none; flex: 1 1 0%; }
+.admin-collapsed .admin-workspace { max-width: none; }
+.admin-main > * { min-width: 0; }
+@media (max-width: 760px) {
+  .admin-sidebar { width: 48px; flex: 0 0 48px; padding: 8px 3px; }
+  .admin-brand { grid-template-columns: 38px; padding: 2px 0 8px; }
+  .admin-brand > div, .admin-brand > .MuiIconButton-root, .admin-nav-group > p,
+  .admin-sidebar .MuiButton-root span, .admin-customer-link { display: none; }
+  .admin-sidebar .MuiButton-root { width: 38px; min-width: 38px; justify-content: center; margin: 3px auto; padding: 6px; }
+  .admin-sidebar .MuiButton-startIcon { margin: 0; min-width: 0; }
+  .admin-workspace { width: 0; min-width: 0; max-width: none; flex: 1 1 0%; padding: 0 4px 20px !important; }
+  .admin-topbar { margin: 0 -4px 12px; padding: 0 4px; }
+  .admin-global-search { width: min(150px, 30vw); }
+  .admin-page-heading { gap: 8px; margin-bottom: 14px; }
+}
+
+.admin-main:has(.admin-users-page) > .admin-page-heading { margin-bottom: 10px; }
+.admin-main:has(.admin-users-page) > .admin-page-heading h4 { font-size: 16px; }
+.admin-main:has(.admin-users-page) > .admin-page-heading p { font-size: 9px; }
+.admin-main:has(.admin-users-page) > .admin-page-heading > .MuiButton-root { min-height: 26px; padding: 3px 10px; font-size: 9px; }
+.admin-users-page table th { font-size: 9px !important; }
+.admin-users-page table td .MuiTypography-root { font-size: 11px !important; line-height: 1.25; }
+.admin-users-page table td:nth-of-type(2) .MuiTypography-root:first-child { font-size: 12px !important; }
+.admin-users-page table td .MuiTypography-caption { font-size: 9px !important; }
+.admin-users-page table td .MuiChip-root { height: 17px; font-size: 8px !important; }
+.admin-users-page table td .MuiChip-icon { font-size: 11px !important; }
+.admin-users-page table td .MuiButton-root { min-height: 20px; padding: 1px 4px; font-size: 9px !important; }
+.admin-users-page table td .MuiIconButton-root { padding: 3px; }
+
+.admin-products-page .admin-products-hero { gap: 8px !important; padding: 8px !important; }
+.admin-products-page .admin-products-hero > div { min-width: 0; }
+.admin-products-page .admin-products-hero .MuiTypography-root { line-height: 1.2; }
+.admin-products-page .admin-products-hero > div:first-child > div:last-child > .MuiTypography-root:first-child { font-size: 16px !important; }
+.admin-products-page > div:nth-child(2) { padding: 8px !important; }
+.admin-products-page > div:nth-child(2) > div:first-child { gap: 6px !important; margin-bottom: 8px !important; }
+.admin-products-page > div:nth-child(2) > div:first-child .MuiInputBase-root,
+.admin-products-page > div:nth-child(2) > div:first-child .MuiSelect-select { min-height: 32px; font-size: 10px !important; }
+.admin-products-page .admin-products-table th { padding: 7px !important; font-size: 11px !important; }
+.admin-products-page .admin-products-table td { padding: 5px !important; font-size: 11px !important; }
+.admin-products-page .admin-products-table td .MuiTypography-root { font-size: 11px !important; line-height: 1.25; }
+.admin-products-page .admin-products-table td:first-of-type .MuiTypography-root:first-child { font-size: 12px !important; }
+.admin-products-page .admin-products-table td .MuiTypography-caption { font-size: 10px !important; }
+.admin-products-page .admin-products-table td .MuiChip-root { height: 20px; font-size: 9px !important; }
+.admin-products-page .admin-products-table td .MuiIconButton-root { padding: 2px; }
+.admin-products-page > div:nth-child(2) > div:nth-last-child(2) .MuiTypography-root { font-size: 11px; }
+.admin-products-page > div:nth-child(2) > div:last-child .MuiButton-root { min-height: 32px; padding: 4px 9px; font-size: 11px; }
+.admin-products-page { zoom: 1; width: 100%; max-width: 100%; }
+.admin-products-page .admin-products-table th:nth-of-type(1), .admin-products-page .admin-products-table td:nth-of-type(1) { width: 31%; }
+.admin-products-page .admin-products-table th:nth-of-type(2), .admin-products-page .admin-products-table td:nth-of-type(2) { width: 10%; }
+.admin-products-page .admin-products-table th:nth-of-type(3), .admin-products-page .admin-products-table td:nth-of-type(3) { width: 13%; }
+.admin-products-page .admin-products-table th:nth-of-type(4), .admin-products-page .admin-products-table td:nth-of-type(4) { width: 8%; }
+.admin-products-page .admin-products-table th:nth-of-type(5), .admin-products-page .admin-products-table td:nth-of-type(5) { width: 10%; }
+.admin-products-page .admin-products-table th:nth-of-type(6), .admin-products-page .admin-products-table td:nth-of-type(6) { width: 7%; }
+.admin-products-page .admin-products-table th:nth-of-type(7), .admin-products-page .admin-products-table td:nth-of-type(7) { width: 9%; }
+.admin-products-page .admin-products-table th:nth-of-type(8), .admin-products-page .admin-products-table td:nth-of-type(8) { width: 12%; }
+.admin-products-page .admin-products-table th:last-child, .admin-products-page .admin-products-table td:last-child { width: 120px !important; min-width: 120px; }
+.admin-products-page .admin-products-table td:last-child .MuiIconButton-root { box-sizing: border-box; width: 18px; min-width: 18px; height: 18px; padding: 1px; }
+.admin-products-page .admin-products-table td:last-child .MuiIconButton-root svg { font-size: 13px !important; }
+@media (max-width: 1000px) {
+  .admin-products-page .admin-products-table th:nth-of-type(1), .admin-products-page .admin-products-table td:nth-of-type(1) { width: 40%; }
+  .admin-products-page .admin-products-table th:nth-of-type(3), .admin-products-page .admin-products-table td:nth-of-type(3) { width: 17%; }
+  .admin-products-page .admin-products-table th:nth-of-type(4), .admin-products-page .admin-products-table td:nth-of-type(4) { width: 9%; }
+  .admin-products-page .admin-products-table th:nth-of-type(5), .admin-products-page .admin-products-table td:nth-of-type(5) { width: 12%; }
+  .admin-products-page .admin-products-table th:nth-of-type(7), .admin-products-page .admin-products-table td:nth-of-type(7) { width: 8%; }
+  .admin-products-page .admin-products-table th:nth-of-type(8), .admin-products-page .admin-products-table td:nth-of-type(8) { width: 14%; }
+}
+
+.admin-main:has(.admin-stores-page) > .admin-page-heading { margin-bottom: 12px; }
+.admin-main:has(.admin-stores-page) > .admin-page-heading h4 { font-size: 20px; }
+.admin-main:has(.admin-stores-page) > .admin-page-heading p { font-size: 11px; }
+.admin-main:has(.admin-stores-page) > .admin-page-heading > .MuiButton-root { min-height: 32px; padding: 5px 12px; font-size: 10px; }
+.admin-stores-page table td:nth-of-type(3) { min-width: 0 !important; }
+.admin-stores-page table td .MuiTypography-root { font-size: 9px !important; line-height: 1.3; }
+.admin-stores-page table td .MuiTypography-caption { font-size: 8px !important; }
+.admin-stores-page table td .MuiIconButton-root { padding: 3px; }
+.admin-stores-page > div:last-child .MuiTypography-caption { font-size: 9px; }
+.admin-stores-page > div:last-child .MuiButton-root { min-height: 30px; padding: 4px 10px; font-size: 10px; }
+@media (max-width: 760px) {
+  .admin-main:has(.admin-stores-page) { overflow-x: hidden; }
+  .admin-stores-page, .admin-stores-page > * { width: 100%; min-width: 0; max-width: 100%; box-sizing: border-box; }
+  .admin-stores-page > div:nth-child(2) { padding: 6px !important; }
+  .admin-stores-page > div:nth-child(2) { overflow: visible; }
+  .admin-stores-page > div:nth-child(2) > div:nth-child(2) { width: 100%; min-width: 0; overflow-x: auto !important; }
+  .admin-stores-page table { min-width: 980px !important; width: 100% !important; }
+  .admin-stores-page > div:nth-child(2) > div:nth-last-child(2),
+  .admin-stores-page > div:nth-child(2) > div:last-child { min-width: 0; width: 100%; flex-wrap: wrap; box-sizing: border-box; }
+  .admin-stores-page > div:nth-child(2) > div:last-child .MuiButton-root { min-width: 0; max-width: 100%; padding: 2px 6px; font-size: 9px; white-space: nowrap; }
+}
+.admin-orders-table th:nth-of-type(1), .admin-orders-table td:nth-of-type(1) { width: 14% !important; }
+.admin-orders-table th:nth-of-type(2), .admin-orders-table td:nth-of-type(2) { width: 23% !important; }
+.admin-orders-table th:nth-of-type(3), .admin-orders-table td:nth-of-type(3) { width: 8% !important; }
+.admin-orders-table th:nth-of-type(4), .admin-orders-table td:nth-of-type(4) { width: 20% !important; }
+.admin-orders-table th:nth-of-type(5), .admin-orders-table td:nth-of-type(5) { width: 6% !important; }
+.admin-orders-table th:nth-of-type(6), .admin-orders-table td:nth-of-type(6) { width: 9% !important; }
+.admin-orders-table th:nth-of-type(7), .admin-orders-table td:nth-of-type(7) { width: 12% !important; }
+.admin-orders-table th:nth-of-type(8), .admin-orders-table td:nth-of-type(8) { width: 8% !important; min-width: 96px; }
+.admin-orders-dashboard .admin-orders-table { min-width: 1250px !important; }
+.admin-orders-table th:nth-of-type(1), .admin-orders-table td:nth-of-type(1),
+.admin-orders-table th:nth-of-type(2), .admin-orders-table td:nth-of-type(2),
+.admin-orders-table th:nth-of-type(3), .admin-orders-table td:nth-of-type(3),
+.admin-orders-table th:nth-of-type(4), .admin-orders-table td:nth-of-type(4),
+.admin-orders-table th:nth-of-type(5), .admin-orders-table td:nth-of-type(5),
+.admin-orders-table th:nth-of-type(6), .admin-orders-table td:nth-of-type(6),
+.admin-orders-table th:nth-of-type(7), .admin-orders-table td:nth-of-type(7),
+.admin-orders-table th:nth-of-type(8), .admin-orders-table td:nth-of-type(8) { width: auto !important; min-width: 0 !important; box-sizing: border-box; }
+.admin-orders-dashboard .admin-orders-table { min-width: 0 !important; width: 100% !important; }
+.admin-orders-table tbody td .MuiTypography-root { font-size: 10px !important; line-height: 1.25 !important; }

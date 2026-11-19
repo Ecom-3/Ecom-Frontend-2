@@ -119,7 +119,11 @@
 .cart-page-scroll {
   flex: 1;
   min-height: 0;
+  min-width: 0;
   overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior-y: contain;
+  scrollbar-gutter: stable;
   padding: 16px 12px 140px 12px;
   display: flex;
   flex-direction: column;
@@ -131,8 +135,11 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  height: 60vh;
-  gap: 16px;
+  flex: 0 0 auto;
+  min-height: 140px;
+  height: auto;
+  padding: 16px;
+  gap: 10px;
 }
 
 .shop-now-btn {
@@ -303,6 +310,9 @@
   flex-direction: column;
   gap: 12px;
   margin-top: 8px;
+  width: min(100%, 760px);
+  min-width: 0;
+  align-self: center;
 }
 
 .saved-store-card {
@@ -360,6 +370,9 @@
   min-width: 0;
   flex: 1;
 }
+
+.saved-item-info .slot-item-title,
+.saved-item-info .slot-item-weight { overflow-wrap: anywhere; }
 
 .saved-item-actions {
   display: flex;

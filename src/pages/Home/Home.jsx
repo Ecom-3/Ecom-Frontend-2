@@ -388,7 +388,7 @@ const Home = () => {
               {specialPreview.map((prod) => <ProductCard key={productCardKey(prod)} {...prod} />)}
             </ProductSection>}
 
-            {newArrivalPreview.length > 0 && <ProductSection title={t('newArrivals')} onViewAll={() => setCollection('newArrival')}>
+            {newArrivalPreview.length > 0 && <ProductSection title={t('newArrivals')} subtitle="Fresh picks from our stores" onViewAll={() => setCollection('newArrival')}>
               {newArrivalPreview.map((prod) => <ProductCard key={productCardKey(prod)} {...prod} />)}
             </ProductSection>}
 

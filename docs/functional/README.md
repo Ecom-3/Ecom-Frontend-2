@@ -14,6 +14,7 @@ This pack describes the implemented application, including customer shopping, ad
 | [Administration](administration.md) | Every configured admin module, data entry, actions, scope and reporting |
 | [Store and delivery operations](operations.md) | Store profile, delivery rules, partner management, assignment and delivery lifecycle |
 | [Workflows and business rules](workflows.md) | Cross-role journeys, state transitions and business-rule register |
+| [Business overview diagram](business-overview.mmd) | Customer, operations, administration and service relationships |
 | [Integrations and data](integrations.md) | Service ownership, local persistence, configuration dependencies and errors |
 | [Gaps and limitations](gaps.md) | Disabled, local, unreachable and inconsistent behavior |
 | [Acceptance scenarios](acceptance.md) | Functional verification scenarios and execution status |

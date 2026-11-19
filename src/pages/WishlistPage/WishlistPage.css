@@ -2,12 +2,14 @@
   display: flex;
   flex-direction: column;
   height: 100vh;
+  min-height: 0;
   background-color: #fbfbfb;
   overflow: hidden;
   font-family: 'Poppins', sans-serif;
 }
 
 .wishlist-page-header {
+  flex: 0 0 auto;
   background-color: #0B6E4F;
   padding: 10px 16px;
   color: #ffffff;
@@ -27,8 +29,13 @@
 
 .wishlist-scroll-content {
   flex: 1;
+  min-height: 0;
+  min-width: 0;
   overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior-y: contain;
   padding: 16px 14px 100px 14px;
+  scrollbar-gutter: stable;
 }
 
 .wishlist-grid {

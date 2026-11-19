@@ -160,19 +160,21 @@ const CartPage = () => {
         {cartLoading && <Typography role="status" sx={{ p: 2 }}>Updating cart...</Typography>}
         {cartError && <Typography role="alert" color={cartUnavailable ? 'error' : 'text.secondary'} sx={{ p: 2 }}>{cartError}</Typography>}
         {cartItems.length === 0 ? (
-          <Box className="empty-cart-page">
-            <Typography variant="h6" color="textSecondary">
-              Your cart is empty
-            </Typography>
-            <Button
-              variant="contained"
-              className="shop-now-btn"
-              onClick={() => navigate('/home')}
-            >
-              Shop Now
-            </Button>
+          <>
+            <Box className="empty-cart-page">
+              <Typography variant="h6" color="textSecondary">
+                Your cart is empty
+              </Typography>
+              <Button
+                variant="contained"
+                className="shop-now-btn"
+                onClick={() => navigate('/home')}
+              >
+                Shop Now
+              </Button>
+            </Box>
             {savedForLaterSection}
-          </Box>
+          </>
         ) : (
           <Box className="cart-items-container">
           <Box className="cart-content-grid">

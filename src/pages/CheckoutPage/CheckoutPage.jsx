@@ -47,6 +47,18 @@ const formatClockTime = (minutes) => {
 const formatSlotValue = (value) => value ? formatClockTime(Number(value.slice(0, 2)) * 60 + Number(value.slice(3, 5))).label : '';
 
 const localDateValue = (date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+const pickupReadyTime = () => {
+  const readyAt = new Date(Date.now() + 30 * 60 * 1000);
+  return { date: localDateValue(readyAt), slot: formatClockTime(readyAt.getHours() * 60 + readyAt.getMinutes()).value };
+};
+const pickupTimeLabel = (date, slot) => {
+  if (!slot) return '';
+  const time = formatSlotValue(slot);
+  if (!date || date === localDateValue(new Date())) return time;
+  const pickupDate = new Date(`${date}T12:00:00`);
+  const dateLabel = Number.isNaN(pickupDate.getTime()) ? date : new Intl.DateTimeFormat('en-IN', { dateStyle: 'medium' }).format(pickupDate);
+  return `${dateLabel}, ${time}`;
+};
 const COMPLETED_CHECKOUT_RETURN_KEY = 'freshcart.completedCheckoutReturnToCart';
 const selectionForStore = (selections, storeId, initialMode = 'delivery') => selections[storeId] || { fulfillment: initialMode, deliveryMethod: '', pickupTiming: 'asap', date: '', slot: '' };
 const updateStoreSelection = (setSelections, storeId, patch) => setSelections((current) => ({
@@ -265,7 +277,7 @@ const CheckoutPage = () => {
     if (selection.fulfillment === 'pickup') return group.items.map((item) => ({
       ...baseLine(item), deliveryType: 'pickup', deliveryLabel: 'Store Pickup', estimatedDelivery: '', deliveryCharge: 0,
       fulfillmentType: 'nearby', globalApproval: 'Not Required', quote: null,
-      scheduleDate: selection.pickupTiming === 'scheduled' ? selection.date || '' : '', scheduleSlot: selection.pickupTiming === 'scheduled' ? selection.slot || '' : '', pickupDetails: group.store.address || group.store.location || '',
+      scheduleDate: selection.date || '', scheduleSlot: selection.slot || '', pickupDetails: group.store.address || group.store.location || '',
     }));
     const requestedMethod = selection.deliveryMethod || preferredDeliveryMethod({ ...quote, deliveryAvailable: true });
     const chosen = quote?.methods?.find((entry) => entry.enabled !== false && entry.deliveryType === requestedMethod);
@@ -353,10 +365,14 @@ const CheckoutPage = () => {
     return scheduleSlotsFor(group).find((item) => item.value === selection.slot) || null;
   };
   const saveStoreSelection = (group) => {
-    const selection = selectionForStore(fulfillmentByStore, group.id, initialFulfillment);
+    let selection = selectionForStore(fulfillmentByStore, group.id, initialFulfillment);
     if (selection.fulfillment === 'pickup') {
       if (group.store.pickup === 'No' || group.store.pickupEnabled === false) return setError(`${group.name} does not support store pickup.`);
       if (selection.pickupTiming === 'scheduled' && (!selection.date || !selection.slot || !scheduleSlotsFor(group).some((item) => item.value === selection.slot))) return setError(`Choose a preferred pickup date and time for ${group.name}.`);
+      if (selection.pickupTiming !== 'scheduled' && (!selection.date || !selection.slot)) {
+        selection = { ...selection, ...pickupReadyTime() };
+        updateStoreSelection(setFulfillmentByStore, group.id, { date: selection.date, slot: selection.slot });
+      }
     } else {
       if (!(selectedLocation?.address || deliveryAddress)) return setError(`Select a delivery address for ${group.name}.`);
       const state = deliveryQuotesByStore[group.id];
@@ -441,14 +457,24 @@ const CheckoutPage = () => {
     }
     if (contactEditing) return setError('Save the Contact Number before continuing.');
     if (!isValidIndianMobile(contactPhone)) return setError('Enter a valid 10-digit Contact Number.');
-    const firstLine = deliveryLines[0] || {};
+    const bookedPickupTimes = Object.fromEntries(cartStoreGroups
+      .filter((group) => !group.global && savedFulfillmentByStore[group.id]?.fulfillment === 'pickup' && savedFulfillmentByStore[group.id]?.pickupTiming !== 'scheduled')
+      .map((group) => [group.id, pickupReadyTime()]));
+    const checkoutDeliveryLines = deliveryLines.map((line) => bookedPickupTimes[line.storeId]
+      ? { ...line, scheduleDate: bookedPickupTimes[line.storeId].date, scheduleSlot: bookedPickupTimes[line.storeId].slot }
+      : line);
+    const firstLine = checkoutDeliveryLines[0] || {};
+    const checkoutStoreSelections = Object.fromEntries(cartStoreGroups.map((group) => {
+      const selection = savedFulfillmentByStore[group.id] || selectionForStore(fulfillmentByStore, group.id, initialFulfillment);
+      return [group.id, bookedPickupTimes[group.id] ? { ...selection, ...bookedPickupTimes[group.id] } : selection];
+    }));
     const deliveryModeForCheckout = cartStoreGroups.some((group) => !group.global && savedFulfillmentByStore[group.id]?.fulfillment === 'pickup')
       ? (hasDeliverySelection || hasGlobalDelivery ? 'mixed' : 'pickup') : 'delivery';
     const firstSelection = cartStoreGroups[0] ? (savedFulfillmentByStore[cartStoreGroups[0].id] || {}) : {};
     const checkoutDraft = {
-      method: deliveryLines.length === 1 ? firstLine.deliveryType : 'mixed', deliveryMode: deliveryModeForCheckout,
+      method: checkoutDeliveryLines.length === 1 ? firstLine.deliveryType : 'mixed', deliveryMode: deliveryModeForCheckout,
       fulfillmentType: isGlobalReview ? 'mixed' : 'nearby', channel: isGlobalReview ? 'Global Fulfillment' : 'Nearby Store',
-      globalApproval: isGlobalReview ? 'Pending' : 'Not Required', deliveryLines,
+      globalApproval: isGlobalReview ? 'Pending' : 'Not Required', deliveryLines: checkoutDeliveryLines,
       sourceStoreId: sourceStoreId, sourceStore: sourceStoreName, sourceLocation: selectedStore?.location || '', sourceState: selectedStore?.state || '',
       date: firstLine.scheduleDate || '', slot: firstLine.scheduleSlot || '',
       notes: notes.trim(), coupon: appliedCoupon?.name || '', appliedCoupon, discount, promotionVerified:Boolean(appliedCoupon), subtotal, deliveryFee,
@@ -459,7 +485,7 @@ const CheckoutPage = () => {
       deliveryQuote: deliveryLines.find((line) => line.fulfillmentType !== 'global' && line.quote)?.quote || null,
       customerLatitude: Number.isFinite(customerLat) ? customerLat : null, customerLongitude: Number.isFinite(customerLng) ? customerLng : null,
       storeLatitude: selectedStore?.latitude ?? null, storeLongitude: selectedStore?.longitude ?? null,
-      storeSelections: Object.fromEntries(cartStoreGroups.map((group) => [group.id, savedFulfillmentByStore[group.id] || selectionForStore(fulfillmentByStore, group.id, initialFulfillment)])),
+      storeSelections: checkoutStoreSelections,
       pickupStore: firstSelection.fulfillment === 'pickup' ? sourceStoreName : '',
     };
     sessionStorage.setItem('metaarch.checkoutDraft', JSON.stringify(checkoutDraft));
@@ -558,6 +584,10 @@ const CheckoutPage = () => {
                 const selectedSlot = chosenSlotFor(group);
                 const pickupPreparationMinutes = Number(group.store.pickupPreparationMinutes || 30);
                 const pickupReady = group.store.pickupPreparationTime || `${pickupPreparationMinutes} min`;
+                const pickupEstimateFallback = pickupReadyTime();
+                const pickupEstimate = selection.pickupTiming !== 'scheduled' && selection.date && selection.slot
+                  ? pickupTimeLabel(selection.date, selection.slot)
+                  : pickupTimeLabel(pickupEstimateFallback.date, pickupEstimateFallback.slot);
                 return <Box className={`checkout-store-accordion ${expanded ? 'expanded' : ''}`} key={group.id}>
                   <button type="button" className="checkout-store-accordion-heading" aria-expanded={expanded} onClick={() => setExpandedStoreId(expanded ? '' : group.id)}>
                     <Box className="checkout-store-accordion-title"><strong>{group.name}</strong><small>{group.items.length} item{group.items.length === 1 ? '' : 's'} · {formatCurrency(group.subtotal)}</small>
@@ -571,7 +601,7 @@ const CheckoutPage = () => {
                   {group.global ? <Box className="checkout-global-fulfillment"><LocalShippingOutlinedIcon /><Box><strong>Global delivery</strong><small>India-wide shipping · estimated delivery: 7–10 days · pickup unavailable</small></Box></Box> : <>
                     <Box className="checkout-mode-switch" role="group" aria-label={`${group.name} fulfillment`}>
                       <button type="button" className={selection.fulfillment === 'delivery' ? 'selected' : ''} aria-pressed={selection.fulfillment === 'delivery'} onClick={() => { updateStoreSelection(setFulfillmentByStore, group.id, { fulfillment: 'delivery', date: '', slot: '' }); setError(''); }}><LocalShippingOutlinedIcon /> Delivery</button>
-                      <button type="button" disabled={!pickupAvailableForStore} className={selection.fulfillment === 'pickup' ? 'selected' : ''} aria-pressed={selection.fulfillment === 'pickup'} onClick={() => { updateStoreSelection(setFulfillmentByStore, group.id, { fulfillment: 'pickup', pickupTiming: 'asap', date: '', slot: '' }); setError(''); }}><StorefrontOutlinedIcon /> Store pickup</button>
+                      <button type="button" disabled={!pickupAvailableForStore} className={selection.fulfillment === 'pickup' ? 'selected' : ''} aria-pressed={selection.fulfillment === 'pickup'} onClick={() => { updateStoreSelection(setFulfillmentByStore, group.id, { fulfillment: 'pickup', pickupTiming: 'asap', ...pickupReadyTime() }); setError(''); }}><StorefrontOutlinedIcon /> Store pickup</button>
                     </Box>
                     {selection.fulfillment === 'delivery' ? <>
                       {quoteState.loading && <Typography className="checkout-muted" role="status">Checking delivery for this store-</Typography>}
@@ -593,7 +623,7 @@ const CheckoutPage = () => {
                       <StorefrontOutlinedIcon /><Box><strong>{group.name}</strong><span>{group.store.address || group.store.location || 'Store pickup location'}</span>{pickupReady && <small>Preparation estimate: {pickupReady}</small>}{(group.store.pickupInstructions || group.store.deliveryNotes) && <small>{group.store.pickupInstructions || group.store.deliveryNotes}</small>}</Box>
                     </Box>}
                     {selection.fulfillment === 'pickup' && <Box className="checkout-pickup-options">
-                      <Button variant={selection.pickupTiming !== 'scheduled' ? 'contained' : 'outlined'} onClick={() => { updateStoreSelection(setFulfillmentByStore, group.id, { pickupTiming: 'asap', date: '', slot: '' }); setError(''); }}>Pickup when ready<small>Ready in about {pickupReady}; the store will confirm when the order is ready.</small></Button>
+                      <Button variant={selection.pickupTiming !== 'scheduled' ? 'contained' : 'outlined'} onClick={() => { updateStoreSelection(setFulfillmentByStore, group.id, { pickupTiming: 'asap', ...pickupReadyTime() }); setError(''); }}>Pickup when ready<small>Estimated pickup time: {pickupEstimate || pickupReady}. The store will confirm when the order is ready.</small></Button>
                       <Button variant={selection.pickupTiming === 'scheduled' ? 'contained' : 'outlined'} onClick={() => { updateStoreSelection(setFulfillmentByStore, group.id, { pickupTiming: 'scheduled', date: selection.date || dates[0]?.value || '', slot: '' }); setError(''); }}>Schedule pickup<small>Request a preferred pickup time</small></Button>
                     </Box>}
                     {scheduling && <Box className="checkout-schedule-panel">

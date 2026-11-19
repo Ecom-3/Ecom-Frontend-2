@@ -1,5 +1,5 @@
 import { useMemo, useRef, useState } from 'react';
-import { Alert, Box, Button, Checkbox, Chip, FormControl, IconButton, InputAdornment, Menu, MenuItem, Select, TextField, Tooltip, Typography } from '@mui/material';
+import { Alert, Box, Button, Chip, FormControl, IconButton, InputAdornment, Menu, MenuItem, Select, TextField, Tooltip, Typography } from '@mui/material';
 import Inventory2OutlinedIcon from '@mui/icons-material/Inventory2Outlined';
 import StorefrontOutlinedIcon from '@mui/icons-material/StorefrontOutlined';
 import LocationOnOutlinedIcon from '@mui/icons-material/LocationOnOutlined';
@@ -36,7 +36,7 @@ export default function AdminInventoryPage({ records = [], stores = [], location
   const [stockFilter, setStockFilter] = useState('All');
   const [sort, setSort] = useState('name');
   const [page, setPage] = useState(1);
-  const [selectedIds, setSelectedIds] = useState([]);
+
   const [moreAnchor, setMoreAnchor] = useState(null);
   const [moreRecord, setMoreRecord] = useState(null);
   const [importError, setImportError] = useState('');
@@ -66,10 +66,7 @@ export default function AdminInventoryPage({ records = [], stores = [], location
   const lowStockCount = records.filter((record) => stockStatus(record) === 'Low stock' || stockStatus(record) === 'Out of stock').length;
   const resetPage = (setter) => (value) => { setter(value); setPage(1); };
   const selectSx = { minWidth: 138, '& .MuiSelect-select': { py: 1.15, pl: 1.2, fontSize: 12 } };
-  const allShownSelected = shown.length > 0 && shown.every((record) => selectedIds.includes(rowKey(record)));
-  const toggleShownSelection = () => setSelectedIds((current) => allShownSelected
-    ? current.filter((id) => !shown.some((record) => rowKey(record) === id))
-    : [...new Set([...current, ...shown.map((record) => rowKey(record))])]);
+
   const importInventoryFile = async (event) => {
     const file = event.target.files?.[0];
     event.target.value = '';
@@ -104,7 +101,6 @@ export default function AdminInventoryPage({ records = [], stores = [], location
       <Box sx={{ overflowX: 'auto' }}>
         <Box component="table" sx={{ width: '100%', minWidth: 850, borderCollapse: 'separate', borderSpacing: '0 4px', fontSize: 13 }}>
           <Box component="thead"><Box component="tr" sx={{ bgcolor: '#075f43', color: '#fff', '& th:first-of-type': { borderRadius: '8px 0 0 8px' }, '& th:last-of-type': { borderRadius: '0 8px 8px 0' } }}>
-            <Box component="th" sx={{ width: 42, px: .7 }}><Checkbox size="small" checked={allShownSelected} indeterminate={selectedIds.length > 0 && !allShownSelected} onChange={toggleShownSelection} sx={{ color: '#fff', '&.Mui-checked,&.MuiCheckbox-indeterminate': { color: '#fff' } }}/></Box>
             {[[<Inventory2OutlinedIcon/>, 'Product'], [<StorefrontOutlinedIcon/>, 'Store Name'], [<LocationOnOutlinedIcon/>, 'Location'], [<LayersOutlinedIcon/>, 'Stock'], [null, 'Actions']].map(([icon, heading]) => <Box component="th" key={heading} sx={{ textAlign: heading === 'Actions' ? 'right' : 'left', px: 1.2, py: 1.05, fontSize: 12, fontWeight: 750, whiteSpace: 'nowrap' }}><Box sx={{ display: 'flex', alignItems: 'center', justifyContent: heading === 'Actions' ? 'flex-end' : 'flex-start', gap: .65 }}>{icon&&<Box sx={{ display: 'inline-flex', '& svg': { fontSize: 16 } }}>{icon}</Box>}{heading}{heading==='Product'&&<SwapVertOutlinedIcon sx={{fontSize:15,opacity:.85}}/>}</Box></Box>)}
           </Box></Box>
           <Box component="tbody">{shown.map((record) => {
@@ -113,17 +109,16 @@ export default function AdminInventoryPage({ records = [], stores = [], location
             const color = state === 'In stock' ? '#dff5e7' : state === 'Low stock' ? '#fff0d8' : '#fee2e2';
             const ink = state === 'In stock' ? '#087443' : state === 'Low stock' ? '#a45b00' : '#a32626';
             return <Box component="tr" key={rowKey(record)} sx={{ bgcolor: '#fff', '&:hover': { bgcolor: '#f7fbf9' }, '& td': { borderBottom: '1px solid #e8eeeb' } }}>
-              <Box component="td" sx={{ width: 42, px: .7, borderBottom: '1px solid #e8eeeb' }}><Checkbox size="small" checked={selectedIds.includes(rowKey(record))} onChange={() => setSelectedIds((current) => current.includes(rowKey(record)) ? current.filter((id) => id !== rowKey(record)) : [...current, rowKey(record)])}/></Box>
               <Box component="td" sx={{ p: 1, minWidth: 260 }}><Box sx={{ display: 'flex', alignItems: 'center', gap: 1.1 }}><SafeProductImage src={record.productImage} alt="" style={{ width: 42, height: 42, objectFit: 'cover', borderRadius: 6, flexShrink: 0, background: '#f1f5f3' }}/><Box sx={{ minWidth: 0 }}><Typography fontWeight={750} noWrap>{record.name || 'Catalog product'}</Typography><Typography variant="caption" color="text.secondary" noWrap>SKU: {record.sku || '—'}</Typography></Box></Box></Box>
               <Box component="td" sx={{ p: 1.1, minWidth: 155 }}><Typography fontWeight={650}>{record.store || 'Unassigned'}</Typography></Box>
               <Box component="td" sx={{ p: 1.1, minWidth: 145 }}><Typography fontWeight={650}>{record.location || '—'}</Typography></Box>
               <Box component="td" sx={{ p: 1.1, whiteSpace: 'nowrap' }}><Chip size="small" label={`Stock: ${quantity}`} sx={{ bgcolor: color, color: ink, fontWeight: 750 }}/>{state !== 'In stock' && <Typography display="block" variant="caption" sx={{ color: ink, mt: .3 }}>{state}</Typography>}</Box>
               <Box component="td" sx={{ p: .7, textAlign: 'right', whiteSpace: 'nowrap' }}><Tooltip title="View inventory details"><IconButton size="small" disabled={!record.id} onClick={() => onView(record)} sx={{color:'#075f43',bgcolor:'#f2f8f5',mr:.4}}><VisibilityOutlinedIcon fontSize="small"/></IconButton></Tooltip><Tooltip title="Stock +10"><IconButton size="small" onClick={() => onStock(record, 'increase', 10, 'Manual stock in')} disabled={!record.id || stockBusy === `${record.id}:increase:10`} sx={{color:'#075f43',bgcolor:'#f2f8f5',mr:.4}}><AddBoxOutlinedIcon fontSize="small"/></IconButton></Tooltip><Tooltip title={record.id ? "Adjust inventory" : "Set initial stock"}><IconButton size="small" onClick={() => onAdjust(record)} sx={{color:'#075f43',bgcolor:'#f2f8f5',mr:.4}}><TuneOutlinedIcon fontSize="small"/></IconButton></Tooltip><Tooltip title="More actions"><IconButton size="small" disabled={!record.id} onClick={(event)=>{setMoreAnchor(event.currentTarget);setMoreRecord(record);}} sx={{color:'#52645b'}}><MoreVertOutlinedIcon fontSize="small"/></IconButton></Tooltip></Box>
             </Box>;
-          })}{!shown.length && <Box component="tr"><Box component="td" colSpan={6} sx={{ p: 4, textAlign: 'center', color: 'text.secondary' }}>No inventory records match these filters.</Box></Box>}</Box>
+          })}{!shown.length && <Box component="tr"><Box component="td" colSpan={5} sx={{ p: 4, textAlign: 'center', color: 'text.secondary' }}>No inventory records match these filters.</Box></Box>}</Box>
         </Box>
       </Box>
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 1, mt: 1, px: .5, flexWrap: 'wrap' }}><Typography variant="caption" color="text.secondary">Showing {filtered.length ? (safePage - 1) * pageSize + 1 : 0}–{Math.min(safePage * pageSize, filtered.length)} of {filtered.length} inventory items</Typography><Box sx={{ display: 'flex', alignItems: 'center', gap: .45 }}>{selectedIds.length>0&&<Typography variant="caption" color="text.secondary" sx={{mr:.5}}>{selectedIds.length} selected</Typography>}<IconButton size="small" disabled={safePage<=1} onClick={()=>setPage((value)=>Math.max(1,value-1))}><KeyboardArrowLeftOutlinedIcon/></IconButton>{pageNumbers.map((number,index)=>number==='…'?<Typography key={`dots-${index}`} variant="caption" sx={{px:.35}}>…</Typography>:<Button key={number} size="small" onClick={()=>setPage(number)} sx={{minWidth:27,width:27,height:27,p:0,bgcolor:number===safePage?'#087451':'transparent',color:number===safePage?'#fff':'#26382f',borderRadius:1,fontWeight:number===safePage?800:500,'&:hover':{bgcolor:number===safePage?'#075f43':'#edf5f1'}}}>{number}</Button>)}<IconButton size="small" disabled={safePage>=pageCount} onClick={()=>setPage((value)=>Math.min(pageCount,value+1))}><KeyboardArrowRightOutlinedIcon/></IconButton></Box></Box>
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 1, mt: 1, px: .5, flexWrap: 'wrap' }}><Typography variant="caption" color="text.secondary">Showing {filtered.length ? (safePage - 1) * pageSize + 1 : 0}–{Math.min(safePage * pageSize, filtered.length)} of {filtered.length} inventory items</Typography><Box sx={{ display: 'flex', alignItems: 'center', gap: .45 }}><IconButton size="small" disabled={safePage<=1} onClick={()=>setPage((value)=>Math.max(1,value-1))}><KeyboardArrowLeftOutlinedIcon/></IconButton>{pageNumbers.map((number,index)=>number==='…'?<Typography key={`dots-${index}`} variant="caption" sx={{px:.35}}>…</Typography>:<Button key={number} size="small" onClick={()=>setPage(number)} sx={{minWidth:27,width:27,height:27,p:0,bgcolor:number===safePage?'#087451':'transparent',color:number===safePage?'#fff':'#26382f',borderRadius:1,fontWeight:number===safePage?800:500,'&:hover':{bgcolor:number===safePage?'#075f43':'#edf5f1'}}}>{number}</Button>)}<IconButton size="small" disabled={safePage>=pageCount} onClick={()=>setPage((value)=>Math.min(pageCount,value+1))}><KeyboardArrowRightOutlinedIcon/></IconButton></Box></Box>
     </Box>
     <Menu anchorEl={moreAnchor} open={Boolean(moreAnchor)} onClose={()=>{setMoreAnchor(null);setMoreRecord(null);}}><MenuItem onClick={()=>{onStock(moreRecord,'decrease',1,'Manual stock out');setMoreAnchor(null);setMoreRecord(null);}}>Stock −1</MenuItem><MenuItem onClick={()=>{onAdjust(moreRecord);setMoreAnchor(null);setMoreRecord(null);}}>Adjust inventory</MenuItem><MenuItem onClick={()=>{onView(moreRecord);setMoreAnchor(null);setMoreRecord(null);}}>View details</MenuItem></Menu>
   </Box>;

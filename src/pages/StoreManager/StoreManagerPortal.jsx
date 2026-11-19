@@ -224,7 +224,7 @@ const StoreManagerProductsPage = () => {
   const [errors, setErrors] = useState({});
   const [deleting, setDeleting] = useState(null);
   const productFieldSuggestions = (key) => {
-    const presets = { subcategory:['Pickles','Spices','Dry Fruits','Snacks','Masala','Other'], pack:['100 g','200 g','250 g','500 g','1 kg','Pack of 1','Pack of 2'], type:['Vegetarian','Non-vegetarian','Organic','Regular'], shelfLife:['3 months','6 months','9 months','12 months'] };
+    const presets = { pack:['100 g','200 g','250 g','500 g','1 kg','Pack of 1','Pack of 2'], type:['Vegetarian','Non-vegetarian','Organic','Regular'], shelfLife:['3 months','6 months','9 months','12 months'] };
     const values = products.flatMap((product) => { const value = product[key]; return key === 'tags' ? (Array.isArray(value) ? value : String(value || '').split(',')) : Array.isArray(value) ? value : [value]; });
     return [...new Set([...(presets[key] || []), ...values].map((value) => String(value || '').trim()).filter(Boolean))].sort((left, right) => left.localeCompare(right));
   };
@@ -394,7 +394,7 @@ const StoreManagerProductsPage = () => {
         <TextField label="SKU" value={form.sku || ''} onChange={(event) => setField('sku', event.target.value)} error={Boolean(errors.sku)} helperText={errors.sku}/>
         {renderProductSuggestion('brand', 'Brand')}
         <TextField label="URL slug (optional)" value={form.slug || ''} onChange={(event) => setField('slug', event.target.value)}/>
-        {renderProductSuggestion('subcategory', 'Subcategory')}
+        {/* Subcategory is temporarily disabled. */}
         {renderProductSuggestion('pack', 'Pack')}
         {renderProductSuggestion('type', 'Product type')}
         {renderProductSuggestion('shelfLife', 'Shelf life')}

@@ -19,6 +19,7 @@ export default function GoogleLocationPicker({
   autoFocusSearch = false,
   confirmLabel = 'Confirm Location',
   onConfirm,
+  showConfirm = true,
 }) {
   const mapNode = useRef(null);
   const autocompleteNode = useRef(null);
@@ -164,6 +165,6 @@ export default function GoogleLocationPicker({
     </Box>
     {error && <Alert severity="error">{error}</Alert>}
     {selection && <Box className="google-location-address"><Typography fontWeight={800}>{selection.title || 'Selected location'}</Typography><Typography>{selection.address || selection.subtitle}</Typography>{geocoding && <Typography variant="caption">Updating address...</Typography>}{selection.provider === 'OPENSTREETMAP' && <Typography variant="caption" component="a" href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">Address lookup © OpenStreetMap contributors</Typography>}</Box>}
-    {onConfirm && <Button fullWidth variant="contained" disabled={!selection || geocoding || loading} onClick={() => onConfirm(selection)}>{confirmLabel}</Button>}
+    {showConfirm && onConfirm && <Button fullWidth variant="contained" disabled={!selection || geocoding || loading} onClick={() => onConfirm(selection)}>{confirmLabel}</Button>}
   </Box>;
 }

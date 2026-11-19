@@ -11,7 +11,7 @@ import './LocationSelectionModal.css';
 const cleanText = (value) => String(value || '').split(',').map((part) => part.trim()).filter((part) => part && !/^(undefined|null)$/i.test(part)).join(', ').replace(/\s+/g, ' ').trim();
 
 export default function LocationSelectionModal() {
-  const { showLocationModal, setShowLocationModal, saveSelectedLocation, isLoggedIn, addresses, orderAddresses, selectedLocation } = useContext(AppContext);
+  const { showLocationModal, setShowLocationModal, saveSelectedLocation, addresses, orderAddresses, selectedLocation } = useContext(AppContext);
   const [selected, setSelected] = useState(selectedLocation || null);
   const [error, setError] = useState('');
 
@@ -26,7 +26,7 @@ export default function LocationSelectionModal() {
       seen.add(key);
       list.push({ ...entry, title: entry.type || 'Saved address', address, latitude, longitude, coordinates: { lat: latitude, lng: longitude }, source: 'manual' });
       return list;
-    }, []).slice(0, 5);
+    }, []).slice(0, 3);
   }, [addresses, orderAddresses]);
 
   const close = () => { sessionStorage.removeItem('locationPickerManualOpen'); setSelected(selectedLocation || null); setError(''); setShowLocationModal(false); };
@@ -39,15 +39,22 @@ export default function LocationSelectionModal() {
 
 
 
-  return <Dialog open={showLocationModal} onClose={close} aria-labelledby="choose-location-title" className="choose-location-dialog" fullWidth maxWidth="md">
+  return <Dialog open={showLocationModal} onClose={close} aria-labelledby="choose-location-title" className="choose-location-dialog" fullWidth maxWidth="lg">
     <DialogContent>
       <IconButton className="choose-location-close" aria-label="Close location popup" onClick={close}><CloseIcon /></IconButton>
-      <Box className="choose-location-icon"><LocationOnOutlinedIcon /></Box>
+      <Box className="choose-location-heading"><Box className="choose-location-icon"><LocationOnOutlinedIcon /></Box>
       <Typography id="choose-location-title" component="h2">Select delivery location</Typography>
-      <Typography id="choose-location-description">Search, use GPS, or move the map pin to choose your delivery address.</Typography>
+      <Typography id="choose-location-description">Search, use GPS, or choose from your saved addresses to set your delivery address.</Typography></Box>
       {error && <Alert severity="warning" sx={{ my: 1 }}>{error}</Alert>}
-      {isLoggedIn && savedOptions.length > 0 && <Box className="choose-location-saved" role="group" aria-label="Your saved addresses"><Typography component="h3">Deliver to a saved address</Typography><Box className="choose-location-saved-list">{savedOptions.map((entry) => <Button key={entry.id} fullWidth variant="outlined" onClick={() => setSelected(entry)}>{entry.fromOrder ? <HistoryOutlinedIcon fontSize="small" /> : <LocationOnOutlinedIcon fontSize="small" />}<span className="choose-location-saved-text"><strong>{entry.type || 'Previously used'}</strong><span>{entry.address}</span></span></Button>)}</Box><Divider>OR</Divider></Box>}
-      <GoogleLocationPicker value={selected} onChange={setSelected} onConfirm={save} confirmLabel="Confirm Location" />
+      <Box className="choose-location-layout">
+        <Box className="choose-location-saved-panel" role="group" aria-label="Your saved addresses">
+          <Box className="choose-location-tabs"><Button startIcon={<LocationOnOutlinedIcon/>}>Saved Addresses</Button><Button startIcon={<HistoryOutlinedIcon/>} onClick={() => document.querySelector('.choose-location-map-panel .google-location-input')?.focus()}>Search Address</Button></Box>
+          <Box className="choose-location-saved"><Typography component="h3">Deliver to a saved address</Typography><Box className="choose-location-saved-list">{savedOptions.map((entry, index) => <Button key={entry.id || `${entry.address}-${index}`} fullWidth variant="outlined" className={selected?.address === entry.address ? 'selected' : ''} onClick={() => setSelected(entry)}>{entry.fromOrder ? <HistoryOutlinedIcon fontSize="small" /> : <LocationOnOutlinedIcon fontSize="small" />}<span className="choose-location-saved-text"><strong>{entry.type || 'Home'}</strong><span>{entry.address}</span></span><span className="choose-location-radio"/></Button>)}</Box>{!savedOptions.length && <Typography className="choose-location-empty">No saved addresses yet. Choose a location on the map.</Typography>}</Box>
+          <Divider>OR</Divider><Button className="choose-location-add" variant="outlined" onClick={() => { sessionStorage.setItem('locationPickerManualOpen', 'true'); setShowLocationModal(false); window.location.assign('/address-form'); }}>＋ Add New Address</Button>
+        </Box>
+        <Box className="choose-location-map-panel"><GoogleLocationPicker value={selected} onChange={setSelected} showConfirm={false} /></Box>
+      </Box>
+      <Button className="choose-location-confirm" fullWidth variant="contained" disabled={!selected} onClick={() => save(selected)}>Confirm Location</Button>
     </DialogContent>
   </Dialog>;
 }

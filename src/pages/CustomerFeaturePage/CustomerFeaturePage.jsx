@@ -110,11 +110,12 @@ const CustomerFeaturePage = ({ type }) => {
   };
 
   return (
-    <Box sx={{ minHeight: '100vh', bgcolor: '#f8fafc' }}>
-      <Box sx={{ bgcolor: '#075F40', color: 'white', p: 2, display: 'flex', alignItems: 'center', gap: 2 }}>
+    <Box sx={{ height: '100dvh', minHeight: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden', bgcolor: '#f8fafc' }}>
+      <Box sx={{ flex: '0 0 auto', bgcolor: '#075F40', color: 'white', p: 2, display: 'flex', alignItems: 'center', gap: 2 }}>
         <Button onClick={() => navigate(-1)} sx={{ color: 'white' }}>Back</Button>
         <Typography variant="h6" sx={{ fontWeight: 700 }}>{config.title}</Typography>
       </Box>
+      <Box sx={{ flex: '1 1 auto', minHeight: 0, width: '100%', overflowY: 'auto', overscrollBehavior: 'contain', WebkitOverflowScrolling: 'touch' }}>
       <Box sx={{ maxWidth: 760, mx: 'auto', p: 3 }}>
         <Box sx={{ bgcolor: 'white', borderRadius: 3, p: 3, boxShadow: '0 4px 16px rgba(15,23,42,.08)' }}>
           <Typography sx={{ color: '#64748b', mb: 2 }}>{config.empty}</Typography>
@@ -170,6 +171,7 @@ const CustomerFeaturePage = ({ type }) => {
 
           {message && <Typography role="status" sx={{ color: '#075F40', mt: 2 }}>{message}</Typography>}
         </Box>
+      </Box>
       </Box>
     </Box>
   );

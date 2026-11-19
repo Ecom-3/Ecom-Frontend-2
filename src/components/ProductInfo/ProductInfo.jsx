@@ -9,7 +9,7 @@ import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import { AppContext } from '../../context/AppContext';
 import ProductCard from '../../components/ProductCard/ProductCard';
 import { getProduct, getProductVariants, getProductImages, getPublicStoreProducts } from '../../services/catalogApi';
-import { adaptProduct, adaptImage, adaptVariant, variantChoiceLabel } from '../../services/catalogAdapter';
+import { adaptProduct, adaptImage, adaptVariant, adaptStoreProductList, variantChoiceLabel } from '../../services/catalogAdapter';
 import { getPublicInventoryAvailability } from '../../services/inventoryApi';
 import { loadProductStock } from '../../utils/productStock.js';
 import { normalizeWeightLabel } from '../../utils/productVariantData.js';
@@ -27,12 +27,13 @@ const ProductInfo = () => {
   const { productId } = useParams();
   const location = useLocation();
   const scrollRef = useRef(null);
-  const { selectedProduct, addToCart, updateQuantity, openCart, cartCount, cartItems, isLoggedIn, formatCurrency, catalogProducts, catalogStores, selectedLocation, sameCatalogItem, cartLoading, cartError } = useContext(AppContext);
+  const { selectedProduct, addToCart, updateQuantity, openCart, cartCount, cartItems, isLoggedIn, formatCurrency, catalogStores, selectedLocation, sameCatalogItem, cartLoading, cartError } = useContext(AppContext);
   const [imageIndex, setImageIndex] = useState(0);
   const [imageFallbackSrc, setImageFallbackSrc] = useState('');
   const [activeLink, setActiveLink] = useState(null);
   const [productReviews, setProductReviews] = useState([]);
   const [availableStores, setAvailableStores] = useState([]);
+  const [sameStoreProductResult, setSameStoreProductResult] = useState(null);
   const targetId = productId || selectedProduct?.productId || selectedProduct?.id || selectedProduct?.sku;
   useEffect(() => {
     let active = true;
@@ -158,10 +159,54 @@ const ProductInfo = () => {
 
   const productIdentity = (item) => String(item.productId || item.id || item.sku || '').trim().toLowerCase();
   const currentProductIdentity = productIdentity({ ...product, productId: targetId });
-  const bestSellers = [...new Map(catalogProducts.filter((item) => productIdentity(item) !== currentProductIdentity
-    && (item.bestSeller === 'Yes' || item.bestSeller === true)
-    && item.category === product.category)
-    .map((item) => [productIdentity(item), item])).values()].slice(0, 3);
+  useEffect(() => {
+    const storeId = product.storeId;
+    if (!storeId) {
+      setSameStoreProductResult({ storeId: '', items: [] });
+      return undefined;
+    }
+    let ignore = false;
+    setSameStoreProductResult({ storeId, items: null });
+    getPublicStoreProducts(storeId, { status: 'ACTIVE', page: 0, size: 200, sort: 'name,asc' }).then(async (response) => {
+      const mappings = adaptStoreProductList(response || []).map((item) => ({ ...item, storeId: item.storeId || storeId }));
+      const enriched = await Promise.all(mappings.map(async (mapping) => {
+        if (mapping.product || !mapping.productId) return mapping;
+        try {
+          const fetchedProduct = adaptProduct(await getProduct(mapping.productId));
+          return { ...mapping, product: { ...fetchedProduct, storeId: mapping.storeId, store: mapping.storeName, storeName: mapping.storeName } };
+        } catch { return mapping; }
+      }));
+      if (ignore) return;
+      const items = enriched.filter((mapping) => mapping.available !== false
+        && String(mapping.status || 'ACTIVE').toUpperCase() === 'ACTIVE'
+        && mapping.product
+        && mapping.product.active !== false
+        && mapping.product.available !== false
+        && productIdentity({ ...mapping.product, productId: mapping.productId || mapping.product.productId || mapping.product.id }) !== currentProductIdentity)
+        .map((mapping) => {
+          const mappedStore = catalogStores.find((item) => String(item.id) === String(mapping.storeId));
+          const storeName = mapping.storeName || mappedStore?.name || product.storeName;
+          const priceOverride = mapping.priceOverride;
+          return {
+            ...mapping.product,
+            storeId: mapping.storeId,
+            store: storeName,
+            storeName,
+            available: mapping.available,
+            priceOverride,
+            ...(priceOverride !== null && priceOverride !== undefined ? { price: priceOverride } : {}),
+          };
+        });
+      setSameStoreProductResult({ storeId, items: [...new Map(items.map((item) => [productIdentity(item), item])).values()] });
+    }).catch(() => {
+      if (!ignore) setSameStoreProductResult({ storeId, items: [] });
+    });
+    return () => { ignore = true; };
+  }, [product.storeId, product.storeName, currentProductIdentity, catalogStores]);
+  const sameStoreProducts = product.storeId && sameStoreProductResult?.storeId === product.storeId && Array.isArray(sameStoreProductResult?.items)
+    ? sameStoreProductResult.items
+    : [];
+  const sameStoreProductsLoading = Boolean(product.storeId && (sameStoreProductResult?.storeId !== product.storeId || !Array.isArray(sameStoreProductResult?.items)));
   const productImages = [product.image, ...(product.gallery || [])].filter((image, index, values) => image && values.indexOf(image) === index);
   const otherAvailableStoreNames = [...new Set(availableStores.map((item) => item.storeName || item.store || item.storeId).filter((name) => name && name !== product.storeName))];
   const selectedImageIndex = Math.min(imageIndex, Math.max(0, productImages.length - 1));
@@ -217,6 +262,15 @@ const ProductInfo = () => {
         <IconButton onClick={() => navigate(-1)} className="header-back-btn">
           <ArrowBackIcon style={{ color: '#ffffff' }} />
         </IconButton>
+        <Box component="nav" className="product-page-nav" aria-label="Main navigation">
+          <button type="button" onClick={() => navigate('/home')}>Home</button>
+          <button type="button" onClick={() => navigate('/home')}>Products</button>
+          <button type="button" onClick={() => navigate('/categories')}>Categories</button>
+          <button type="button" onClick={() => navigate('/home')}>Offers</button>
+          <button type="button" onClick={() => navigate('/stores')}>Stores</button>
+          <button type="button" onClick={() => navigate('/about-us')}>About</button>
+        </Box>
+        <Button className="product-back-link" onClick={() => navigate('/home')}>Back to Products</Button>
       </Box>
 
       {/* Content Scroll View */}
@@ -271,24 +325,24 @@ const ProductInfo = () => {
           <Button variant="outlined" onClick={() => navigate('/reviews')} sx={{ justifyContent:'flex-start',gap:1,textTransform:'none' }}><Rating readOnly size="small" precision={0.1} value={averageRating} /> {averageRating ? `${averageRating.toFixed(1)} · ${Number(product.reviewCount ?? approvedRatings.length)} reviews` : 'No approved reviews yet'}</Button>
           {approvedRatings.length > 0 && <Box className="info-block" aria-label="Approved customer reviews"><Typography className="info-block-heading">Customer reviews</Typography>{approvedRatings.map((review) => <Box key={review.id} sx={{ py:1.5,borderBottom:'1px solid #e2e8f0',display:'grid',gap:0.75 }}><Rating value={Number(review.rating)||0} readOnly size="small" /><Typography sx={{ whiteSpace:'pre-wrap' }}>{review.comment || 'Customer rated this product.'}</Typography>{!!review.photoUrls?.length && <Box sx={{ display:'flex',gap:1,flexWrap:'wrap' }}>{review.photoUrls.map((photo,index)=><Box component="img" key={`${review.id}:${index}`} src={photo} alt={`Customer review photo ${index+1}`} sx={{ width:70,height:70,objectFit:'cover',borderRadius:1 }} />)}</Box>}{review.adminReply && <Box sx={{ pl:1.5,borderLeft:'3px solid #087f5b' }}><Typography variant="caption" fontWeight={700}>Response</Typography><Typography>{review.adminReply}</Typography></Box>}</Box>)}</Box>}
 
-          {/* About the Source */}
+          {/* Marketed By */}
           <Box className="info-block">
-            <Typography className="info-block-heading">About the Source</Typography>
+            <Typography className="info-block-heading">Marketed By</Typography>
             <Typography className="about-source-text">
               {product.aboutSource || 'Not specified'}
             </Typography>
           </Box>
 
-          {/* Bestsellers Section */}
+          {/* Same store recommendations */}
           <Box className="info-block bestsellers-block">
-            <Typography className="info-block-heading">Bestsellers in {product.category || 'this category'}</Typography>
+            <Typography className="info-block-heading">Recommended products from {product.storeName || 'this store'}</Typography>
             <Box className="bestsellers-scroll-row">
-              {bestSellers.length ? bestSellers.map((item) => (
+              {sameStoreProducts.length ? sameStoreProducts.map((item) => (
                 <ProductCard
                   key={`${item.storeId || ""}:${item.productId || item.id}`}
                   {...item}
                 />
-              )) : <Typography color="text.secondary">No products in this category are marked as bestsellers yet.</Typography>}
+              )) : <Typography color="text.secondary">{sameStoreProductsLoading ? 'Loading products from this store...' : 'No other products from this store are available right now.'}</Typography>}
             </Box>
           </Box>
         </Box>

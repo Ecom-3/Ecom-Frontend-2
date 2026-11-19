@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useState } from 'react';
-import { Box, Button, Checkbox, IconButton, MenuItem, Select, TextField, Tooltip, Typography } from '@mui/material';
+import { Box, Button, IconButton, MenuItem, Select, TextField, Tooltip, Typography } from '@mui/material';
 import CategoryOutlinedIcon from '@mui/icons-material/CategoryOutlined';
 import Inventory2OutlinedIcon from '@mui/icons-material/Inventory2Outlined';
 import StorefrontOutlinedIcon from '@mui/icons-material/StorefrontOutlined';
@@ -26,7 +26,7 @@ export default function AdminCategoriesPage({ records = [], products = [], store
   const [location, setLocation] = useState('All Locations');
   const [sort, setSort] = useState('newest');
   const [page, setPage] = useState(1);
-  const [selected, setSelected] = useState([]);
+
   const [grid, setGrid] = useState(false);
   const pageSize = 6;
   const locations = useMemo(() => ['All Locations', ...new Set(stores.map((store) => store.location).filter(Boolean))], [stores]);
@@ -48,8 +48,7 @@ export default function AdminCategoriesPage({ records = [], products = [], store
   const pages = Math.max(1, Math.ceil(filtered.length / pageSize));
   const safePage = Math.min(page, pages);
   const visible = filtered.slice((safePage - 1) * pageSize, safePage * pageSize);
-  const allVisibleSelected = visible.length > 0 && visible.every((record) => selected.includes(String(record.id)));
-  const toggleAll = () => setSelected((current) => allVisibleSelected ? current.filter((id) => !visible.some((record) => String(record.id) === id)) : [...new Set([...current, ...visible.map((record) => String(record.id))])]);
+
   const resetPage = (setter) => (event) => { setter(event.target.value); setPage(1); };
 
   return <Box sx={{ display: 'grid', gap: 1.2 }}>
@@ -73,20 +72,20 @@ export default function AdminCategoriesPage({ records = [], products = [], store
         <Tooltip title={grid ? 'Show list' : 'Show grid'}><IconButton onClick={() => setGrid((value) => !value)} sx={{ color: '#075f43', bgcolor: grid ? '#087451' : '#edf7f2', '&:hover': { bgcolor: '#087451', color: '#fff' } }}>{grid ? <FormatListBulletedOutlinedIcon fontSize="small"/> : <GridViewOutlinedIcon fontSize="small"/>}</IconButton></Tooltip>
       </Box>
       {grid ? <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(190px,1fr))', gap: 1 }}>{visible.map((record) => <Box key={record.id} sx={{ p: 1.2, border: '1px solid #e5ece8', borderRadius: 1.5 }}><SafeProductImage src={record.image || record.thumbnailUrl || categoryImageFor(record)} alt="" style={{ width: '100%', height: 100, objectFit: 'contain', background: '#f6f8f7', borderRadius: 7 }}/><Typography fontWeight={800} mt={.8}>{record.name}</Typography><Typography variant="caption">{categoryProducts(record).length} products</Typography><Box sx={{ display: 'flex', justifyContent: 'flex-end' }}><IconButton size="small" onClick={() => onView(record)}><VisibilityOutlinedIcon fontSize="small"/></IconButton><IconButton size="small" onClick={() => onEdit(record)}><EditOutlinedIcon fontSize="small"/></IconButton></Box></Box>)}</Box> : <Box sx={{ overflowX: 'auto' }}>
-        <Box component="table" className="admin-categories-table" sx={{ width: '100%', minWidth: 0, tableLayout: 'fixed', borderCollapse: 'separate', borderSpacing: '0 3px', '& th': { p: .9, color: '#fff', textAlign: 'left', fontSize: 10, whiteSpace: 'nowrap', bgcolor: '#075b40' }, '& th:first-of-type': { borderRadius: '8px 0 0 8px' }, '& th:last-of-type': { borderRadius: '0 8px 8px 0' }, '& td': { px: .8, py: .55, borderBottom: '1px solid #edf1ef', fontSize: 10, verticalAlign: 'middle' } }}>
-          <Box component="thead"><Box component="tr"><Box component="th" sx={{ width: 38 }}><Checkbox size="small" checked={allVisibleSelected} onChange={toggleAll} sx={{ color: '#fff', '&.Mui-checked': { color: '#fff' } }}/></Box>{['Category', 'Description', 'Actions'].map((heading) => <Box component="th" key={heading}>{heading}</Box>)}</Box></Box>
+        <Box component="table" className="admin-categories-table" sx={{ width: '100%', minWidth: 850, tableLayout: 'fixed', borderCollapse: 'separate', borderSpacing: '0 3px', '& th': { p: .9, color: '#fff', textAlign: 'left', fontSize: 10, whiteSpace: 'nowrap', bgcolor: '#075b40' }, '& th:first-of-type': { borderRadius: '8px 0 0 8px' }, '& th:last-of-type': { borderRadius: '0 8px 8px 0' }, '& td': { px: .8, py: .55, borderBottom: '1px solid #edf1ef', fontSize: 10, lineHeight: 1.35, verticalAlign: 'middle' } }}>
+          <Box component="thead"><Box component="tr">{['Category', 'Description', 'Actions'].map((heading) => <Box component="th" key={heading}>{heading}</Box>)}</Box></Box>
           <Box component="tbody">{visible.map((record) => {
             const active = normalize(record.status || 'Active') === 'active';
             return <Box component="tr" key={record.id} sx={{ '&:hover': { bgcolor: '#f7fbf9' } }}>
-              <Box component="td"><Checkbox size="small" checked={selected.includes(String(record.id))} onChange={() => setSelected((current) => current.includes(String(record.id)) ? current.filter((id) => id !== String(record.id)) : [...current, String(record.id)])}/></Box>
-              <Box component="td" sx={{ minWidth: 0, overflow: 'hidden' }}><Box sx={{ display: 'flex', alignItems: 'center', gap: .9, minWidth: 0, overflow: 'hidden' }}><SafeProductImage src={record.image || record.thumbnailUrl || categoryImageFor(record)} alt="" style={{ width: 36, height: 32, objectFit: 'contain', borderRadius: 6, background: '#f5f7f6', flexShrink: 0 }}/><Tooltip title={record.name || 'Unnamed category'}><Typography fontSize={10} fontWeight={850} noWrap sx={{minWidth:0,overflow:'hidden',textOverflow:'ellipsis'}}>{record.name || 'Unnamed category'}</Typography></Tooltip></Box></Box>
-              <Box component="td" sx={{ minWidth: 0, overflow: 'hidden' }}><Tooltip title={record.description || '—'}><Typography fontSize={10} noWrap sx={{overflow:'hidden',textOverflow:'ellipsis'}}>{record.description || '—'}</Typography></Tooltip></Box>
+              
+              <Box component="td" sx={{ minWidth: 0 }}><Box sx={{ display: 'flex', alignItems: 'center', gap: .9, minWidth: 0 }}><SafeProductImage src={record.image || record.thumbnailUrl || categoryImageFor(record)} alt="" style={{ width: 36, height: 32, objectFit: 'contain', borderRadius: 6, background: '#f5f7f6', flexShrink: 0 }}/><Tooltip title={record.name || 'Unnamed category'}><Typography fontSize={10} fontWeight={650} sx={{ minWidth: 0, whiteSpace: 'normal', overflowWrap: 'anywhere' }}>{record.name || 'Unnamed category'}</Typography></Tooltip></Box></Box>
+              <Box component="td" sx={{ minWidth: 0, overflowWrap: 'anywhere' }}><Tooltip title={record.description || '—'}><Typography fontSize={10} sx={{ whiteSpace: 'normal', overflowWrap: 'anywhere' }}>{record.description || '—'}</Typography></Tooltip></Box>
               <Box component="td" sx={{ whiteSpace: 'nowrap' }}><Tooltip title="View category"><IconButton size="small" onClick={() => onView(record)}><VisibilityOutlinedIcon sx={{ fontSize: 16 }}/></IconButton></Tooltip>{onEdit&&<Tooltip title="Edit category"><IconButton size="small" onClick={() => onEdit(record)}><EditOutlinedIcon sx={{ fontSize: 16 }}/></IconButton></Tooltip>}{onToggle&&<Tooltip title={active ? 'Deactivate' : 'Activate'}><IconButton size="small" onClick={() => onToggle(record)} sx={{ color: '#087451' }}><PowerSettingsNewOutlinedIcon sx={{ fontSize: 16 }}/></IconButton></Tooltip>}{onDelete&&<Tooltip title="Delete category"><IconButton size="small" onClick={() => onDelete(record)} sx={{ color: '#bd3438', bgcolor: '#fff0f0' }}><DeleteOutlineOutlinedIcon sx={{ fontSize: 16 }}/></IconButton></Tooltip>}</Box>
             </Box>;
-          })}{!visible.length&&<Box component="tr"><Box component="td" colSpan={4} sx={{ py: 5, textAlign: 'center', color: '#68776f' }}>No categories match these filters.</Box></Box>}</Box>
+          })}{!visible.length&&<Box component="tr"><Box component="td" colSpan={3} sx={{ py: 5, textAlign: 'center', color: '#68776f' }}>No categories match these filters.</Box></Box>}</Box>
         </Box>
       </Box>}
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mt: 1, px: .3 }}><Typography variant="caption" color="text.secondary">Showing {filtered.length ? (safePage - 1) * pageSize + 1 : 0}–{Math.min(safePage * pageSize, filtered.length)} of {filtered.length} categories{selected.length ? ` · ${selected.length} selected` : ''}</Typography><Box sx={{ display: 'flex', alignItems: 'center' }}><IconButton size="small" disabled={safePage <= 1} onClick={() => setPage((value) => Math.max(1, value - 1))}><KeyboardArrowLeftOutlinedIcon/></IconButton><Button size="small" sx={{ minWidth: 28, bgcolor: '#087451', color: '#fff' }}>{safePage}</Button><IconButton size="small" disabled={safePage >= pages} onClick={() => setPage((value) => Math.min(pages, value + 1))}><KeyboardArrowRightOutlinedIcon/></IconButton></Box></Box>
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mt: 1, px: .3 }}><Typography variant="caption" color="text.secondary">Showing {filtered.length ? (safePage - 1) * pageSize + 1 : 0}–{Math.min(safePage * pageSize, filtered.length)} of {filtered.length} categories</Typography><Box sx={{ display: 'flex', alignItems: 'center' }}><IconButton size="small" disabled={safePage <= 1} onClick={() => setPage((value) => Math.max(1, value - 1))}><KeyboardArrowLeftOutlinedIcon/></IconButton><Button size="small" sx={{ minWidth: 28, bgcolor: '#087451', color: '#fff' }}>{safePage}</Button><IconButton size="small" disabled={safePage >= pages} onClick={() => setPage((value) => Math.min(pages, value + 1))}><KeyboardArrowRightOutlinedIcon/></IconButton></Box></Box>
       <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: .7, mt: .4 }}>{onExport&&<Button onClick={onExport}>Export</Button>}</Box>
     </Box>
   </Box>;

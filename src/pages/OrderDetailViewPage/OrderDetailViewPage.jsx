@@ -4,6 +4,7 @@ import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import PersonOutlineOutlinedIcon from '@mui/icons-material/PersonOutlineOutlined';
 import LocalPhoneOutlinedIcon from '@mui/icons-material/LocalPhoneOutlined';
 import HomeOutlinedIcon from '@mui/icons-material/HomeOutlined';
+import StorefrontOutlinedIcon from '@mui/icons-material/StorefrontOutlined';
 import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown';
 import { useNavigate, useLocation, useParams } from 'react-router-dom';
 import Header from '../../components/Header/Header';
@@ -17,6 +18,7 @@ import OrderDocuments from '../../components/OrderDocuments';
 import FulfillmentTrackingPanel from '../../components/FulfillmentTrackingPanel/FulfillmentTrackingPanel';
 import NotificationHistoryPanel from '../../components/NotificationHistoryPanel/NotificationHistoryPanel';
 import { useFulfillmentTracking } from '../../hooks/useFulfillmentTracking';
+import { formatPickupSchedule } from '../../utils/pickupSchedule.js';
 import './OrderDetailViewPage.css';
 
 const formatAddress = (address) => {
@@ -160,6 +162,9 @@ const OrderDetailViewPage = () => {
   const handlingFee = Number(order.handlingFee || 0);
   const discountAmount = Number(order.discountAmount || 0);
   const otherCharges = Math.max(0, Number(price || 0) - itemSubtotal - deliveryCharge - handlingFee + discountAmount);
+  const pickupBookedTime = [order.fulfillmentType, order.deliveryMethod].some((value) => ['pickup', 'store-pickup'].includes(String(value || '').toLowerCase()))
+    ? formatPickupSchedule(order.scheduledDeliveryDate, order.scheduledDeliverySlot)
+    : '';
 
   return (
     <Box className="order-detail-wrapper">
@@ -203,6 +208,11 @@ const OrderDetailViewPage = () => {
             <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 2, borderTop: '1px solid #e2e8f0', pt: 0.75 }}><Typography fontWeight={700}>Order total</Typography><Typography fontWeight={700}>{formatCurrency(price)}</Typography></Box>
           </Box>
         </Box>
+
+        {pickupBookedTime && <Box component="section" sx={{ display: 'flex', alignItems: 'center', gap: 1.5, bgcolor: '#ecfdf5', color: '#075f40', p: 2, borderBottom: '1px solid #d1fae5' }}>
+          <StorefrontOutlinedIcon />
+          <Box><Typography fontWeight={700}>Pickup booked</Typography><Typography variant="body2">Please collect your order at {pickupBookedTime}.</Typography></Box>
+        </Box>}
 
         <Box className="delivery-status-card">
           <Box className="status-card-left">

@@ -70,3 +70,48 @@
 .choose-location-saved-text { display: flex; flex-direction: column; min-width: 0; line-height: 1.35; }
 .choose-location-saved-text strong { font-size: 12px; color: #17392c; }
 .choose-location-saved-text span { font-size: 11px; color: #66746c; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* Full viewport delivery selector, sized to keep its map and actions in view. */
+.choose-location-dialog .MuiDialog-paper { box-sizing: border-box; width: calc(100% - 48px); max-width: 900px; height: min(620px, calc(100dvh - 48px)); max-height: calc(100dvh - 48px); margin: 24px; border-radius: 16px; overflow: hidden; }
+.choose-location-dialog .MuiDialogContent-root { box-sizing: border-box; height: 100%; padding: 6px 14px 14px; display: flex; flex-direction: column; overflow: hidden; text-align: left; }
+.choose-location-heading { flex: 0 0 auto; text-align: center; padding: 0 36px 8px; }
+.choose-location-heading .choose-location-icon { width: 38px; height: 38px; box-sizing: border-box; justify-content: center; align-items: center; padding: 0; margin: 0 auto 4px; background: #e4f4ec; }
+.choose-location-heading .choose-location-icon svg { font-size: 21px; }
+.choose-location-heading #choose-location-title { font-size: 19px; line-height: 1.2; color: #243a35; }
+.choose-location-heading #choose-location-description { margin: 4px 0 0; font-size: 10px; line-height: 1.35; }
+.choose-location-layout { flex: 1 1 auto; min-height: 0; display: grid; grid-template-columns: minmax(240px, 39%) minmax(0, 1fr); gap: 10px; }
+.choose-location-saved-panel,.choose-location-map-panel { min-height: 0; padding: 9px; border: 1px solid #e5eae7; border-radius: 12px; box-shadow: 0 1px 3px rgba(22,45,34,.06); }
+.choose-location-saved-panel { display: flex; flex-direction: column; overflow: hidden; }
+.choose-location-tabs { flex: 0 0 auto; display: grid; grid-template-columns: 1fr 1fr; gap: 4px; margin-bottom: 12px; }
+.choose-location-tabs .MuiButton-root { min-width: 0; padding: 7px 5px; border-radius: 8px; background: #f1f3f4; color: #45534d; font-size: 10px; line-height: 1.2; white-space: nowrap; }
+.choose-location-tabs .MuiButton-root:first-child { background: #087451; color: #fff; }
+.choose-location-tabs .MuiButton-startIcon { margin-right: 4px; }
+.choose-location-tabs .MuiSvgIcon-root { font-size: 14px; }
+.choose-location-saved { min-height: 0; margin: 0; }
+.choose-location-saved > h3 { margin: 0 0 7px; font-size: 11px; color: #293e36; }
+.choose-location-saved-list { display: grid; gap: 6px; max-height: none; overflow: hidden; }
+.choose-location-saved-list .MuiButton-root { min-height: 62px; padding: 7px; gap: 7px; border-color: #dce5df; border-radius: 8px; text-align: left; }
+.choose-location-saved-list .MuiButton-root.selected { border-color: #087451; background: #f1faf5; }
+.choose-location-saved-list .MuiButton-root > svg { color: #087451; background: #e5f4eb; padding: 4px; box-sizing: content-box; border-radius: 6px; }
+.choose-location-saved-text { flex: 1; }
+.choose-location-saved-text strong { font-size: 10px; }
+.choose-location-saved-text span { display: -webkit-box; white-space: normal; font-size: 9px; line-height: 1.3; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
+.choose-location-radio { flex: 0 0 12px; width: 12px; height: 12px; border: 1px solid #aab7b0; border-radius: 50%; }
+.choose-location-saved-list .selected .choose-location-radio { border: 3px solid #087451; }
+.choose-location-empty { padding: 10px; font-size: 10px; color: #68756f; }
+.choose-location-saved-panel .MuiDivider-root { margin: 10px 0; flex: 0 0 auto; font-size: 10px; }
+.choose-location-add.MuiButton-root { flex: 0 0 auto; width: 100%; min-height: 30px; padding: 5px; border-color: #087451; border-radius: 7px; color: #087451; font-size: 10px; }
+.choose-location-map-panel { overflow: hidden; }
+.choose-location-map-panel .google-location-picker { height: 100%; min-height: 0; grid-template-rows: 30px minmax(120px, 1fr) max-content; gap: 7px; }
+.choose-location-map-panel .google-location-search { min-height: 0; }
+.choose-location-map-panel .google-location-input { height: 30px; padding: 0 12px; border-radius: 8px; background: #202628; color: #fff; font-size: 10px; }
+.choose-location-map-panel .google-location-input::placeholder { color: #c7ceca; }
+.choose-location-map-panel .google-location-map-wrap { height: auto; min-height: 0; border-radius: 9px; }
+.choose-location-map-panel .google-location-address { min-height: 56px; max-height: 76px; box-sizing: border-box; padding: 7px 9px; overflow: hidden; border-radius: 8px; background: #f7fbf9; }
+.choose-location-map-panel .google-location-address p:first-child { font-size: 10px; line-height: 1.3; color: #17392c; }
+.choose-location-map-panel .google-location-address p:last-of-type { overflow: visible; font-size: 9px; line-height: 1.35; color: #3f5149; white-space: normal; overflow-wrap: anywhere; }
+.choose-location-map-panel .google-location-address p:last-child { display: none; }
+.choose-location-confirm.MuiButton-root { flex: 0 0 auto; margin-top: 9px; min-height: 32px; border-radius: 7px; background: #006747; font-size: 10px; }
+@media (max-height: 600px) { .choose-location-heading { padding-bottom: 6px; } .choose-location-heading .choose-location-icon { width: 34px; height: 34px; margin-bottom: 3px; } .choose-location-heading .choose-location-icon svg { font-size: 19px; } .choose-location-layout { grid-template-columns: minmax(205px, 39%) minmax(0, 1fr); } .choose-location-confirm.MuiButton-root { margin-top: 7px; min-height: 30px; } }
+@media (max-width: 650px) { .choose-location-dialog .MuiDialogContent-root { padding: 6px 8px 10px; } .choose-location-layout { grid-template-columns: minmax(150px, 42%) minmax(0, 1fr); gap: 6px; } .choose-location-saved-panel,.choose-location-map-panel { padding: 6px; } .choose-location-tabs .MuiButton-root { font-size: 8px; } .choose-location-tabs .MuiButton-startIcon { display: none; } .choose-location-saved-list .MuiButton-root { min-height: 55px; } .choose-location-map-panel .google-location-picker { grid-template-rows: 30px minmax(110px, 1fr) 42px; gap: 5px; } }
+@media (max-width: 360px) { .choose-location-layout { grid-template-columns: minmax(130px, 42%) minmax(0,1fr); } .choose-location-saved-list .MuiButton-root { padding: 4px; gap: 4px; } }

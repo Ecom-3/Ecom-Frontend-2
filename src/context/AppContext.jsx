@@ -109,7 +109,7 @@ export const AppProvider = ({ children }) => {
     setDeliveryModeState(next);
   };
 
-  const cartCount = cartItems.reduce((sum, item) => sum + Number(item.quantity || 0), 0);
+  const cartCount = cartItems.length;
   const localCartTotal = (items = cartItems) => items.reduce((sum, item) => sum + Number(item.price || item.unitPrice || 0) * Number(item.quantity || 0), 0);
   // activeCart represents only one store. Sum visible lines for a multi-store cart.
   const cartTotal = localCartTotal();
@@ -599,8 +599,8 @@ export const AppProvider = ({ children }) => {
     cartMutationPending.current = true;
     setCartLoading(true);
     setCartError('');
+    let rollbackCartItems = null;
     try {
-      if (isLoggedIn && cartHydrationPromise.current) await cartHydrationPromise.current;
       const itemPayload = buildCartItem(product);
       if (!itemPayload) throw new Error('This product is not ready to add. Please reload it.');
       if (!Number.isFinite(itemPayload.unitPrice) || itemPayload.unitPrice < 0) throw new Error('This product has an invalid price.');
@@ -615,13 +615,23 @@ export const AppProvider = ({ children }) => {
       if (isLoggedIn && currentCustomerId()) {
         itemPayload.storeId = resolveCartStoreId(itemPayload);
         if (!itemPayload.storeId) throw new Error('Select a store before using the cart.');
-        let cart = await ensureCart(itemPayload, { preserveVisibleItems: true, forceRefresh: true });
+        // Keep the catalog response snappy: immediately reflect the add in the
+        // UI while the cart service confirms it in the background.
+        rollbackCartItems = cartItems;
+        setCartItems((current) => {
+          const existingIndex = current.findIndex((item) => sameCatalogItem(item, itemPayload));
+          if (existingIndex < 0) return [...current, adaptCartItem({ ...itemPayload, quantity: 1, totalPrice: itemPayload.unitPrice })];
+          return current.map((item, index) => index === existingIndex
+            ? adaptCartItem({ ...item, quantity: Number(item.quantity || 0) + 1, totalPrice: Number(item.unitPrice || item.price || 0) * (Number(item.quantity || 0) + 1) })
+            : item);
+        });
+        let cart = await ensureCart(itemPayload, { preserveVisibleItems: true });
         const guestItems = readGuestCartItems().map(adaptCartItem);
         if (guestItems.some(item => item.storeId === cart.storeId)) {
           await migrateGuestCart(cart, guestItems, addCartItem, sessionStorage, () => true, (item) => { guestCartItemsRef.current = guestCartItemsRef.current.filter((entry) => !sameCatalogItem(entry, item)); writeGuestList('cart', guestCartItemsRef.current); }, false);
           cart = await getActiveCart({ customerId: currentCustomerId(), storeId: itemPayload.storeId });
         }
-        const mutation = planCartLineMutation([...cartItemsFromResponse(cart), ...cartItems], itemPayload, 1, cart.id);
+        const mutation = planCartLineMutation([...cartItemsFromResponse(cart), ...rollbackCartItems], itemPayload, 1, cart.id);
         const nextQuantity = mutation.quantity;
         logCartDiagnostic(`cart.add.plan.${mutation.type}`, {
           storeId: itemPayload.storeId,
@@ -631,11 +641,10 @@ export const AppProvider = ({ children }) => {
           quantity: nextQuantity,
           source: 'server API',
         });
-        await validateCheckoutAvailability([{ storeId: itemPayload.storeId, items: [{ ...itemPayload, quantity: nextQuantity }] }], getPublicInventoryAvailability);
         if (mutation.type === 'update') {
-          await updateCartItem(cart.id, mutation.line.id, { quantity: nextQuantity });
+          cart = await updateCartItem(cart.id, mutation.line.id, { quantity: nextQuantity });
         } else {
-          await addCartItem(cart.id, {
+          cart = await addCartItem(cart.id, {
             productId: itemPayload.productId,
             variantId: itemPayload.variantId,
             productName: itemPayload.productName,
@@ -643,13 +652,20 @@ export const AppProvider = ({ children }) => {
             unitPrice: itemPayload.unitPrice,
           });
         }
-        await refreshCartTotal(cart.id, { mergeStoreItems: true });
+        // The item mutation response is usually already the updated cart.
+        // Apply it immediately, and recalculate totals without blocking the
+        // add-to-cart acknowledgement.
+        if (Array.isArray(cart?.items) || Array.isArray(cart?.cartItems)) mergeCartResponse(cart);
+        calculateCartTotal(cart.id).then((updatedCart) => {
+          if (Array.isArray(updatedCart?.items) || Array.isArray(updatedCart?.cartItems)) mergeCartResponse(updatedCart);
+        }).catch(() => {});
       } else {
         upsertGuestCartItem(itemPayload);
       }
       triggerAddedPopup(itemPayload);
       return true;
     } catch (error) {
+      if (rollbackCartItems) setCartItems(rollbackCartItems);
       setCartUnavailable(isCartServiceUnavailable(error));
       setCartError(error.message || 'Could not add this product to your cart.');
       return false;

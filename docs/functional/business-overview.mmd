@@ -1,0 +1,66 @@
+%% Pickles & Spices e-commerce: business operating model
+%% Render with Mermaid (https://mermaid.js.org/) or paste the flowchart into Mermaid Live Editor.
+flowchart LR
+  subgraph CUSTOMER[Customer journey]
+    C[Customer / guest] --> DISC[Browse catalog and choose store]
+    DISC --> CART[Select product variant and build cart]
+    CART --> CHECK[Checkout: address, delivery or pickup, verified totals]
+    CHECK --> PAY{Payment option}
+    PAY -->|COD| ORDER[Order saved: payment pending]
+    PAY -.->|Online| OFF[Online payment currently disabled]
+    ORDER --> TRACK[Order details and fulfillment tracking]
+    TRACK --> REVIEW[Review after delivery]
+  end
+
+  subgraph OPERATIONS[Commerce and fulfillment]
+    CAT[Catalog, store offers and pricing]
+    INV[Inventory and availability]
+    CHECK -->|quote / stock check| CAT
+    CHECK -->|availability| INV
+    ORDER --> OMS[Order management]
+    OMS --> GROUP{Order scope}
+    GROUP -->|Local store| STORE[Store Manager: confirm and prepare]
+    STORE --> FUL[Fulfillment: allocate, pack, ready]
+    FUL --> SHIP[Shipment created and partner assigned]
+    SHIP --> DP[Delivery Partner: accept, pick up, deliver]
+    DP --> OTP[Customer OTP confirms delivery]
+    OTP --> TRACK
+    GROUP -->|Global order| GLOBAL[Global Admin: review and stocked-store coordination]
+    GLOBAL --> PREP[Store preparation and parcel tracking]
+    PREP --> TRACK
+    GROUP -->|Multiple stores| MULTI[Store child orders / checkout group]
+    MULTI --> STORE
+  end
+
+  subgraph GOVERNANCE[Business administration]
+    SA[Super Admin: platform and location setup]
+    GA[Global Admin: global commerce and coordination]
+    LA[Location Admin: location and store operations]
+    SM[Store Manager: assigned store, stock, orders and partners]
+    SA --> LA
+    SA --> GA
+    LA --> SM
+    GA --> CAT
+    LA --> CAT
+    SM --> CAT
+    SM --> INV
+    SM --> STORE
+  end
+
+  subgraph PLATFORM[Supporting services]
+    ACCESS[Organization access and customer profiles]
+    CARTS[Cart Service]
+    ORDERS[Order Service]
+    PAYMENTS[Payment Service: records and status]
+    FULSVC[Fulfillment Service: fulfillment, shipment and tracking]
+    NOTIFY[Notification Service]
+  end
+  C -. sign-in / profile .-> ACCESS
+  CART -. cart data .-> CARTS
+  OMS -. order records .-> ORDERS
+  ORDER -. payment status .-> PAYMENTS
+  FUL -. fulfillment and tracking .-> FULSVC
+  DP -. delivery updates .-> NOTIFY
+
+  classDef caveat fill:#fff3cd,stroke:#bd8b00,color:#332701;
+  class OFF,MULTI,GLOBAL caveat;

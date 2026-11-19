@@ -240,11 +240,11 @@
   min-width: 0;
 }
 
-.checkout-address-choice { display: grid; grid-template-rows: 1fr auto; min-width: 0; gap: 2px; }
+.checkout-address-choice { position: relative; display: grid; min-width: 0; }
 .checkout-address-heading-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 4px; }
 .checkout-address-heading-actions .MuiButton-root { min-width: 0; padding: 3px 6px; font-size: 9px; text-transform: none; }
 .checkout-address-heading-actions .MuiSvgIcon-root, .checkout-address-card-actions .MuiSvgIcon-root { width: 14px; height: 14px; }
-.checkout-address-card-actions { display: flex; flex-wrap: wrap; gap: 4px; }
+.checkout-address-card-actions { position: absolute; top: 5px; right: 7px; z-index: 2; display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 4px; }
 
 .checkout-address-card {
   display: flex;
